@@ -1,14 +1,15 @@
 package tui
 
 import (
-	"todo/internal/board"
-
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"todo/internal/board"
 )
 
 // Modes are exclusive: in insert mode every printable key is text and only
@@ -56,7 +57,7 @@ type Model struct {
 
 // push snapshots the current tasks so the mutation about to happen can be
 // undone. No-op key presses must not call it. A fresh mutation forks the
-// history, so whatever was undone away from is no longer reachable.
+// history: whatever was undone away from is no longer reachable.
 func (m Model) push() Model {
 	m.undo = append(m.undo, m.tasks.Clone())
 	m.redo = nil
@@ -64,7 +65,7 @@ func (m Model) push() Model {
 }
 
 // pop restores the last snapshot, keeping the state it left behind for redo.
-// On an empty stack nothing happens at all, on screen or on disk.
+// On an empty stack nothing happens, on screen or on disk.
 func (m Model) pop() Model {
 	if len(m.undo) == 0 {
 		return m
@@ -87,7 +88,6 @@ func (m Model) unpop() Model {
 	return m.clampCursor().save().scroll()
 }
 
-// save writes the board and records the resulting mtime.
 func (m Model) save() Model {
 	if t, err := board.Save(m.path, m.tasks); err == nil {
 		m.saved = t
@@ -111,9 +111,8 @@ func (m Model) setStatus(s board.Status) Model {
 	m = m.push()
 	t := m.tasks[i]
 	t.Status = s
-	tasks := append(m.tasks.Clone()[:i], m.tasks[i+1:]...)
 	// First in the slice is first within its section.
-	m.tasks = append(board.Board{t}, tasks...)
+	m.tasks = append(board.Board{t}, slices.Delete(m.tasks.Clone(), i, i+1)...)
 	m = m.cursorTo(0)
 	return m.save().scroll()
 }
@@ -179,11 +178,10 @@ func New(path string) (Model, error) {
 	if err := board.Validate(string(data)); err != nil {
 		return Model{}, fmt.Errorf("%s: %w", path, err)
 	}
-	saved, _ := board.ModTime(path)
+	saved := board.ModTime(path)
 	return Model{path: path, tasks: board.Parse(string(data)), saved: saved, collapsed: true}, nil
 }
 
-// matches reports whether t survives the current filter.
 func (m Model) matches(t board.Task) bool {
 	q := strings.ToLower(m.filter)
 	return q == "" || strings.Contains(strings.ToLower(t.Title), q)
@@ -279,8 +277,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// insert opens the one-line input to create a task at slice index at with
-// status s.
+// insert opens the one-line input for a new task at slice index at.
 func (m Model) insert(at int, s board.Status) Model {
 	m.mode, m.input, m.editing = insertMode, "", -1
 	m.insertAt, m.insertStatus = at, s
@@ -312,15 +309,12 @@ func (m Model) confirm() Model {
 		m.tasks = tasks
 		return m.save().scroll()
 	}
-	tasks = append(tasks, board.Task{})
-	copy(tasks[m.insertAt+1:], tasks[m.insertAt:])
-	tasks[m.insertAt] = board.Task{Title: title, Status: m.insertStatus}
-	m.tasks = tasks
+	m.tasks = slices.Insert(tasks, m.insertAt, board.Task{Title: title, Status: m.insertStatus})
 	return m.cursorTo(m.insertAt).save().scroll()
 }
 
-// remove deletes the task under the cursor. The cursor index is kept and
-// clamped to the last visible task.
+// remove deletes the task under the cursor, keeping the cursor index and
+// clamping it to the last visible task.
 func (m Model) remove() Model {
 	visible := m.visible()
 	if m.cursor >= len(visible) {
@@ -328,11 +322,10 @@ func (m Model) remove() Model {
 	}
 	m = m.push()
 	i := visible[m.cursor]
-	m.tasks = append(m.tasks.Clone()[:i], m.tasks[i+1:]...)
+	m.tasks = slices.Delete(m.tasks.Clone(), i, i+1)
 	return m.clampCursor().save().scroll()
 }
 
-// insertKey handles a key press while the one-line input is open.
 func (m Model) insertKey(k string) (tea.Model, tea.Cmd) {
 	switch k {
 	case "enter":
@@ -346,9 +339,8 @@ func (m Model) insertKey(k string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// typed applies a key press to a line of text being typed: backspace deletes
-// the last rune, any single-rune key appends itself and everything else — the
-// arrow keys, ctrl chords — is ignored.
+// typed applies a key press to a line being typed: backspace deletes the last
+// rune, any single-rune key appends itself, everything else is ignored.
 func typed(s, k string) string {
 	if k == "backspace" {
 		if r := []rune(s); len(r) > 0 {
@@ -362,8 +354,7 @@ func typed(s, k string) string {
 	return s
 }
 
-// filterKey handles a key press while the filter is being typed. Only Enter
-// and Esc are commands; every printable key narrows the list further.
+// Only Enter and Esc are commands; every printable key narrows the list.
 func (m Model) filterKey(k string) (tea.Model, tea.Cmd) {
 	switch k {
 	case "enter":

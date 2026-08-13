@@ -1,12 +1,12 @@
 package tui
 
 import (
-	"todo/internal/board"
-
 	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"todo/internal/board"
 )
 
 // scrolloff is the number of context rows kept above and below the cursor.
@@ -140,11 +140,7 @@ func (m Model) View() string {
 	if end > len(rows) {
 		end = len(rows)
 	}
-	start := m.offset
-	if start > len(rows) {
-		start = len(rows)
-	}
-	body := strings.Join(rows[start:end], "\n")
+	body := strings.Join(rows[m.offset:end], "\n")
 	for _, line := range m.inputLines() {
 		body += "\n" + line
 	}
@@ -156,8 +152,8 @@ func (m Model) View() string {
 }
 
 // inputLines is the open one-line input, folded onto as many rows as the text
-// needs: a task title being typed is never cut off, the board gives up the
-// rows instead. It is empty unless the input is open.
+// needs: a title being typed is never cut off, the board gives up the rows
+// instead. Empty unless the input is open.
 func (m Model) inputLines() []string {
 	if m.mode != insertMode {
 		return nil
@@ -169,35 +165,12 @@ func (m Model) inputLines() []string {
 	return wrap(line, m.width)
 }
 
-// hintLines wraps the hint bar onto as many rows as it needs, breaking at the
-// " · " separators so no hint is split in half.
+// hintLines wraps the hint bar onto as many rows as it needs.
 func (m Model) hintLines() []string {
-	hints := m.hints()
-	if m.width <= 0 || len([]rune(hints)) <= m.width {
-		return []string{hints}
+	if m.width <= 0 {
+		return []string{m.hints()}
 	}
-	var lines []string
-	cur := ""
-	for _, seg := range strings.Split(hints, " · ") {
-		switch {
-		case cur == "":
-			cur = seg
-		case len([]rune(cur))+3+len([]rune(seg)) <= m.width:
-			cur += " · " + seg
-		default:
-			lines = append(lines, cur)
-			cur = seg
-		}
-	}
-	lines = append(lines, cur)
-	// A single hint wider than the pane — a long filter query, say — is cut, not
-	// wrapped: the hint bar must not grow past the rows listHeight budgeted it.
-	for i, line := range lines {
-		if r := []rune(line); len(r) > m.width {
-			lines[i] = string(r[:m.width])
-		}
-	}
-	return lines
+	return wrap(m.hints(), m.width)
 }
 
 func (m Model) hints() string {

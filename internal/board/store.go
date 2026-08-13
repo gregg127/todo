@@ -58,7 +58,6 @@ func Validate(text string) error {
 	return nil
 }
 
-// heading maps a section heading to its status.
 func heading(line string) (Status, bool) {
 	switch strings.TrimRight(line, " \t") {
 	case "## TODO":
@@ -102,8 +101,7 @@ func Render(b Board) string {
 	return sb.String()
 }
 
-// Load parses the board at path. A missing file yields an empty board and no
-// error.
+// Load parses the board at path. A missing file is an empty board, not an error.
 func Load(path string) (Board, error) {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
@@ -115,9 +113,8 @@ func Load(path string) (Board, error) {
 	return Parse(string(data)), nil
 }
 
-// Save writes the board to path atomically: a temp file in the same directory,
-// written, fsynced and renamed over the target. It returns the mtime of the
-// file it just wrote.
+// Save writes the board to path atomically — temp file in the same directory,
+// fsync, rename — and returns the mtime of the file it just wrote.
 func Save(path string, b Board) (time.Time, error) {
 	dir := filepath.Dir(path)
 	f, err := os.CreateTemp(dir, ".todo-*.md")
@@ -141,17 +138,15 @@ func Save(path string, b Board) (time.Time, error) {
 	if err := os.Rename(tmp, path); err != nil {
 		return time.Time{}, err
 	}
-	return ModTime(path)
+	return ModTime(path), nil
 }
 
-// ModTime is the modification time of path, or the zero time if it is missing.
-func ModTime(path string) (time.Time, error) {
+// ModTime is the modification time of path, or the zero time if it is missing
+// or unreadable.
+func ModTime(path string) time.Time {
 	fi, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		return time.Time{}, nil
-	}
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}
 	}
-	return fi.ModTime(), nil
+	return fi.ModTime()
 }
