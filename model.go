@@ -58,7 +58,7 @@ type Model struct {
 // undone. No-op key presses must not call it. A fresh mutation forks the
 // history, so whatever was undone away from is no longer reachable.
 func (m Model) push() Model {
-	m.undo = append(append([]Board{}, m.undo...), m.tasks.clone())
+	m.undo = append(m.undo, m.tasks.clone())
 	m.redo = nil
 	return m
 }
@@ -69,7 +69,7 @@ func (m Model) pop() Model {
 	if len(m.undo) == 0 {
 		return m
 	}
-	m.redo = append(append([]Board{}, m.redo...), m.tasks.clone())
+	m.redo = append(m.redo, m.tasks.clone())
 	m.tasks = m.undo[len(m.undo)-1]
 	m.undo = m.undo[:len(m.undo)-1]
 	return m.clampCursor().save().scroll()
@@ -81,7 +81,7 @@ func (m Model) unpop() Model {
 	if len(m.redo) == 0 {
 		return m
 	}
-	m.undo = append(append([]Board{}, m.undo...), m.tasks.clone())
+	m.undo = append(m.undo, m.tasks.clone())
 	m.tasks = m.redo[len(m.redo)-1]
 	m.redo = m.redo[:len(m.redo)-1]
 	return m.clampCursor().save().scroll()
@@ -328,20 +328,26 @@ func (m Model) insertKey(k string) (tea.Model, tea.Cmd) {
 	case "esc":
 		m.mode, m.input = normalMode, ""
 		return m, nil
-	case "backspace":
-		if r := []rune(m.input); len(r) > 0 {
-			m.input = string(r[:len(r)-1])
-		}
-		return m, nil
-	case " ", "space":
-		m.input += " "
-		return m, nil
 	}
 	// Every other printable key is text, so a task can be called "quit the job".
-	if r := []rune(k); len(r) == 1 {
-		m.input += k
-	}
+	m.input = typed(m.input, k)
 	return m, nil
+}
+
+// typed applies a key press to a line of text being typed: backspace deletes
+// the last rune, any single-rune key appends itself and everything else — the
+// arrow keys, ctrl chords — is ignored.
+func typed(s, k string) string {
+	if k == "backspace" {
+		if r := []rune(s); len(r) > 0 {
+			return string(r[:len(r)-1])
+		}
+		return s
+	}
+	if r := []rune(k); len(r) == 1 {
+		return s + k
+	}
+	return s
 }
 
 // filterKey handles a key press while the filter is being typed. Only Enter
@@ -354,17 +360,8 @@ func (m Model) filterKey(k string) (tea.Model, tea.Cmd) {
 	case "esc":
 		m.mode, m.filter = normalMode, ""
 		return m.clampCursor().scroll(), nil
-	case "backspace":
-		if r := []rune(m.filter); len(r) > 0 {
-			m.filter = string(r[:len(r)-1])
-		}
-	case " ", "space":
-		m.filter += " "
-	default:
-		if r := []rune(k); len(r) == 1 {
-			m.filter += k
-		}
 	}
+	m.filter = typed(m.filter, k)
 	return m.clampCursor().scroll(), nil
 }
 

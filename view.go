@@ -166,19 +166,14 @@ func (m Model) hintLines() []string {
 		}
 	}
 	lines = append(lines, cur)
-	// A single hint wider than the pane — a long filter query, say — still has
-	// to be cut somewhere.
-	var out []string
-	for _, line := range lines {
-		for r := []rune(line); ; r = r[m.width:] {
-			if len(r) <= m.width {
-				out = append(out, string(r))
-				break
-			}
-			out = append(out, string(r[:m.width]))
+	// A single hint wider than the pane — a long filter query, say — is cut, not
+	// wrapped: the hint bar must not grow past the rows listHeight budgeted it.
+	for i, line := range lines {
+		if r := []rune(line); len(r) > m.width {
+			lines[i] = string(r[:m.width])
 		}
 	}
-	return out
+	return lines
 }
 
 func (m Model) hints() string {
