@@ -21,6 +21,8 @@ var (
 	hintStyle   = lipgloss.NewStyle().Faint(true)
 )
 
+const insertHints = "enter confirm · esc cancel"
+
 const normalHints = "j/k move · 1/2/3 status · J/K reorder · o/O add · cc edit · dd delete · u undo · / filter · q quit"
 
 // rows renders every board row — section headers and task lines — and reports
@@ -88,7 +90,11 @@ func (m Model) listHeight(total int) int {
 	if m.height <= 0 {
 		return total
 	}
+	// The hint bar, and the input row when it is open, cost a row each.
 	h := m.height - 1
+	if m.mode == insertMode {
+		h--
+	}
 	if h < 1 {
 		h = 1
 	}
@@ -131,6 +137,9 @@ func (m Model) View() string {
 		start = len(rows)
 	}
 	body := strings.Join(rows[start:end], "\n")
+	if m.mode == insertMode {
+		body += "\n› " + m.input
+	}
 	hints := m.hints()
 	if m.width > 0 && len([]rune(hints)) > m.width {
 		hints = string([]rune(hints)[:m.width-1]) + "…"
@@ -139,6 +148,9 @@ func (m Model) View() string {
 }
 
 func (m Model) hints() string {
+	if m.mode == insertMode {
+		return insertHints
+	}
 	return normalHints
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"path/filepath"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -9,6 +10,13 @@ import (
 
 // dbFile is the per-directory data file.
 const dbFile = "todo-database.md"
+
+// Modes are exclusive: in insert mode every printable key is text and only
+// Enter and Esc are commands.
+const (
+	normalMode = iota
+	insertMode
+)
 
 // Model is the whole application state; Update is the single reducer.
 type Model struct {
@@ -22,6 +30,14 @@ type Model struct {
 	// width and height come from tea.WindowSizeMsg; offset is the first
 	// board row on screen.
 	width, height, offset int
+	// mode is normalMode or insertMode; input is the text being typed.
+	mode  int
+	input string
+	// editing is the index of the task being edited, or -1 when the input
+	// will create a new task at insertAt with status insertStatus.
+	editing      int
+	insertAt     int
+	insertStatus Status
 	// saved is the mtime the app itself last wrote, so the watcher can tell
 	// its own writes from a hand-edit.
 	saved time.Time
@@ -77,6 +93,18 @@ func (m Model) move(delta int) Model {
 	return m.save().scroll()
 }
 
+// newTask opens the input for a task placed after (offset 1) or before
+// (offset 0) the cursor, in the cursor's section. On an empty board it creates
+// the first TODO task.
+func (m Model) newTask(offset int) Model {
+	visible := m.visible()
+	if len(visible) == 0 {
+		return m.insert(0, Todo)
+	}
+	i := visible[m.cursor]
+	return m.insert(i+offset, m.tasks[i].Status)
+}
+
 // cursorTo puts the cursor on the task at index i in the task slice.
 func (m Model) cursorTo(i int) Model {
 	for row, idx := range m.visible() {
@@ -122,14 +150,104 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// insert opens the one-line input to create a task at slice index at with
+// status s.
+func (m Model) insert(at int, s Status) Model {
+	m.mode, m.input, m.editing = insertMode, "", -1
+	m.insertAt, m.insertStatus = at, s
+	return m
+}
+
+// edit opens the one-line input prefilled with the current task's text.
+func (m Model) edit() Model {
+	visible := m.visible()
+	if m.cursor >= len(visible) {
+		return m
+	}
+	m.mode, m.editing = insertMode, visible[m.cursor]
+	m.input = m.tasks[m.editing].Title
+	return m
+}
+
+// confirm applies the input. Empty or whitespace-only text creates nothing.
+func (m Model) confirm() Model {
+	title := strings.TrimSpace(m.input)
+	m.mode, m.input = normalMode, ""
+	if title == "" {
+		return m
+	}
+	tasks := m.tasks.clone()
+	if m.editing >= 0 {
+		tasks[m.editing].Title = title
+		m.tasks = tasks
+		return m.save().scroll()
+	}
+	tasks = append(tasks, Task{})
+	copy(tasks[m.insertAt+1:], tasks[m.insertAt:])
+	tasks[m.insertAt] = Task{Title: title, Status: m.insertStatus}
+	m.tasks = tasks
+	return m.cursorTo(m.insertAt).save().scroll()
+}
+
+// remove deletes the task under the cursor. The cursor index is kept and
+// clamped to the last visible task.
+func (m Model) remove() Model {
+	visible := m.visible()
+	if m.cursor >= len(visible) {
+		return m
+	}
+	i := visible[m.cursor]
+	m.tasks = append(m.tasks.clone()[:i], m.tasks[i+1:]...)
+	if m.cursor > len(m.tasks)-1 {
+		m.cursor = len(m.tasks) - 1
+	}
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+	return m.save().scroll()
+}
+
+// insertKey handles a key press while the one-line input is open.
+func (m Model) insertKey(k string) (tea.Model, tea.Cmd) {
+	switch k {
+	case "enter":
+		return m.confirm(), nil
+	case "esc":
+		m.mode, m.input = normalMode, ""
+		return m, nil
+	case "backspace":
+		if r := []rune(m.input); len(r) > 0 {
+			m.input = string(r[:len(r)-1])
+		}
+		return m, nil
+	case " ", "space":
+		m.input += " "
+		return m, nil
+	}
+	// Every other printable key is text, so a task can be called "quit the job".
+	if r := []rune(k); len(r) == 1 {
+		m.input += k
+	}
+	return m, nil
+}
+
 func (m Model) key(k string) (tea.Model, tea.Cmd) {
+	if m.mode == insertMode {
+		return m.insertKey(k)
+	}
+
 	if m.pending != "" {
 		pending := m.pending
 		m.pending = ""
 		// A key that does not complete the sequence cancels it and is
 		// swallowed, not re-dispatched.
-		if pending == "g" && k == "g" {
+		switch {
+		case pending == "g" && k == "g":
 			m.cursor = 0
+		case pending == "d" && k == "d":
+			return m.remove(), nil
+		case pending == "c" && k == "c":
+			return m.edit(), nil
 		}
 		return m.scroll(), nil
 	}
@@ -138,8 +256,12 @@ func (m Model) key(k string) (tea.Model, tea.Cmd) {
 	switch k {
 	case "q":
 		return m, tea.Quit
-	case "g":
-		m.pending = "g"
+	case "g", "d", "c":
+		m.pending = k
+	case "o":
+		return m.newTask(1), nil
+	case "O":
+		return m.newTask(0), nil
 	case "j":
 		if m.cursor < n-1 {
 			m.cursor++

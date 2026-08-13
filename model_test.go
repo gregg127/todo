@@ -522,3 +522,151 @@ func TestReorderingOnAnEmptyBoardIsHarmless(t *testing.T) {
 		t.Fatalf("reordering an empty board wrote %q", got)
 	}
 }
+
+func TestOAddsATaskBelowTheCursorInTheCursorsSection(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n\n## DOING\n- [ ] running\n")
+
+	m := send(New(dir), "o", "new", "enter")
+
+	if got, want := file(t, dir), "## TODO\n- [ ] one\n- [ ] new\n- [ ] two\n\n## DOING\n- [ ] running\n\n## DONE\n"; got != want {
+		t.Fatalf("file = %q, want %q", got, want)
+	}
+	if got := cursorLine(t, m); got != "○ new" {
+		t.Fatalf("cursor on %q after adding, want the new task", got)
+	}
+}
+
+func TestOAddsATaskAboveTheCursor(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n")
+
+	send(New(dir), "j", "O", "new", "enter")
+
+	if got, want := file(t, dir), "## TODO\n- [ ] one\n- [ ] new\n- [ ] two\n\n## DOING\n\n## DONE\n"; got != want {
+		t.Fatalf("file = %q, want %q", got, want)
+	}
+}
+
+func TestOInDoingStartsATaskThere(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n\n## DOING\n- [ ] running\n")
+
+	send(New(dir), "j", "o", "another", "enter")
+
+	if got, want := file(t, dir), "## TODO\n- [ ] one\n\n## DOING\n- [ ] running\n- [ ] another\n\n## DONE\n"; got != want {
+		t.Fatalf("file = %q, want %q", got, want)
+	}
+}
+
+func TestOOnAnEmptyBoardCreatesTheFirstTodoTask(t *testing.T) {
+	for _, key := range []string{"o", "O"} {
+		dir := t.TempDir()
+		send(New(dir), key, "first", "enter")
+
+		if got, want := file(t, dir), "## TODO\n- [ ] first\n\n## DOING\n\n## DONE\n"; got != want {
+			t.Fatalf("%s on an empty board wrote %q, want %q", key, got, want)
+		}
+	}
+}
+
+func TestEscCancelsTheInput(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n")
+	before := file(t, dir)
+
+	m := send(New(dir), "o", "never", "esc")
+
+	if got := file(t, dir); got != before {
+		t.Fatalf("cancelled input changed the file: %q", got)
+	}
+	if strings.Contains(m.View(), "never") {
+		t.Fatalf("cancelled input still on the board:\n%s", m.View())
+	}
+}
+
+func TestBlankInputCreatesNoTask(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n")
+	before := file(t, dir)
+
+	send(New(dir), "o", "space", "space", "enter")
+
+	if got := file(t, dir); got != before {
+		t.Fatalf("whitespace-only input created a task: %q", got)
+	}
+}
+
+func TestCCEditsTheCurrentTaskPrefilled(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] typo\n")
+
+	m := send(New(dir), "cc")
+	if !strings.Contains(m.View(), "typo") {
+		t.Fatalf("cc did not prefill the input:\n%s", m.View())
+	}
+
+	m = send(m, "backspace", "backspace", "backspace", "backspace", "fixed", "enter")
+
+	if got, want := file(t, dir), "## TODO\n- [ ] fixed\n\n## DOING\n\n## DONE\n"; got != want {
+		t.Fatalf("file = %q, want %q", got, want)
+	}
+}
+
+func TestDDDeletesImmediatelyAndKeepsTheRow(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n- [ ] three\n")
+
+	m := send(New(dir), "j", "dd")
+
+	if got, want := file(t, dir), "## TODO\n- [ ] one\n- [ ] three\n\n## DOING\n\n## DONE\n"; got != want {
+		t.Fatalf("file = %q, want %q", got, want)
+	}
+	if got := cursorLine(t, m); got != "○ three" {
+		t.Fatalf("cursor on %q after delete, want the task that took the row", got)
+	}
+}
+
+func TestRepeatedDDPrunesARun(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n- [ ] three\n")
+
+	m := send(New(dir), "dd", "dd", "dd")
+
+	if got, want := file(t, dir), "## TODO\n\n## DOING\n\n## DONE\n"; got != want {
+		t.Fatalf("file = %q, want %q", got, want)
+	}
+	if got := cursorLine(t, m); got != "" {
+		t.Fatalf("empty board still shows a cursor on %q", got)
+	}
+	m = send(m, "o", "again", "enter")
+	if got := cursorLine(t, m); got != "○ again" {
+		t.Fatalf("cursor was not at index 0 on the empty board, it is on %q", got)
+	}
+}
+
+func TestNormalModeKeysAreLiteralTextInTheInput(t *testing.T) {
+	dir := t.TempDir()
+
+	send(New(dir), "o", "quit the job 1 2 3 dd", "enter")
+
+	if got, want := file(t, dir), "## TODO\n- [ ] quit the job 1 2 3 dd\n\n## DOING\n\n## DONE\n"; got != want {
+		t.Fatalf("file = %q, want %q", got, want)
+	}
+}
+
+func TestHintBarShowsInsertHintsWhileTheInputIsOpen(t *testing.T) {
+	dir := t.TempDir()
+	m := send(New(dir), "o")
+
+	lines := viewLines(m)
+	if got := lines[len(lines)-1]; !strings.Contains(got, "enter confirm") || !strings.Contains(got, "esc cancel") {
+		t.Fatalf("hint bar %q is not the insert-mode hint bar", got)
+	}
+
+	m = send(m, "esc")
+	lines = viewLines(m)
+	if got := lines[len(lines)-1]; !strings.Contains(got, "q quit") {
+		t.Fatalf("hint bar %q did not return to normal mode", got)
+	}
+}
