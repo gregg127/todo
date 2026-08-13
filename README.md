@@ -1,4 +1,4 @@
-# todo
+# todo tui app
 
 Vibe coded for my personal use.
 
