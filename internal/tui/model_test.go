@@ -1,6 +1,8 @@
-package main
+package tui
 
 import (
+	"todo/internal/board"
+
 	"fmt"
 	"os"
 	"path/filepath"
@@ -53,7 +55,7 @@ func keyMsgs(k string) []tea.KeyMsg {
 // file returns the contents of the todo file in dir, or "" if there is none.
 func file(t *testing.T, dir string) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(dir, dbFile))
+	b, err := os.ReadFile(filepath.Join(dir, board.DefaultFile))
 	if os.IsNotExist(err) {
 		return ""
 	}
@@ -111,7 +113,7 @@ const emptyBoard = "## TODO\n\n## DOING\n\n## DONE\n"
 // file cannot be read.
 func open(t *testing.T, dir string) Model {
 	t.Helper()
-	m, err := New(filepath.Join(dir, dbFile))
+	m, err := New(filepath.Join(dir, board.DefaultFile))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -161,7 +163,7 @@ func TestANamedFileIsReadAndWrittenInsteadOfTheDefault(t *testing.T) {
 	if !strings.Contains(string(got), "- [ ] second") {
 		t.Fatalf("the named file was not written: %q", got)
 	}
-	if _, err := os.Stat(filepath.Join(dir, dbFile)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dir, board.DefaultFile)); !os.IsNotExist(err) {
 		t.Fatalf("the default file was touched as well")
 	}
 }
@@ -188,7 +190,7 @@ func TestAFileTheBoardCannotReadIsRefusedAndLeftAlone(t *testing.T) {
 // write puts contents into dir's todo file.
 func write(t *testing.T, dir, contents string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, dbFile), []byte(contents), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, board.DefaultFile), []byte(contents), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -563,7 +565,7 @@ func TestFirstMutationCreatesTheFile(t *testing.T) {
 	m := open(t, dir)
 	// The board is loaded; the file is then gone, as it would be in a fresh
 	// directory.
-	if err := os.Remove(filepath.Join(dir, dbFile)); err != nil {
+	if err := os.Remove(filepath.Join(dir, board.DefaultFile)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -584,7 +586,7 @@ func TestSaveLeavesNoTempFilesBehind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].Name() != dbFile {
+	if len(entries) != 1 || entries[0].Name() != board.DefaultFile {
 		t.Fatalf("directory contains more than the todo file: %v", entries)
 	}
 }
@@ -595,7 +597,7 @@ func TestTheAppRecordsTheMtimeOfItsOwnSave(t *testing.T) {
 
 	m := send(open(t, dir), "3")
 
-	fi, err := os.Stat(filepath.Join(dir, dbFile))
+	fi, err := os.Stat(filepath.Join(dir, board.DefaultFile))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1033,7 +1035,7 @@ func TestUndoStackIsNeverWrittenToDisk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].Name() != dbFile {
+	if len(entries) != 1 || entries[0].Name() != board.DefaultFile {
 		t.Fatalf("undo left something on disk: %v", entries)
 	}
 }

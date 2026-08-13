@@ -1,6 +1,8 @@
-package main
+package tui
 
 import (
+	"todo/internal/board"
+
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -20,7 +22,7 @@ func tick() tea.Cmd {
 // changedOnDisk reports whether the file's mtime differs from the one the app
 // recorded after its own last save, i.e. whether somebody else wrote the file.
 func (m Model) changedOnDisk() bool {
-	t, err := mtime(m.path)
+	t, err := board.ModTime(m.path)
 	if err != nil {
 		return false
 	}
@@ -37,13 +39,13 @@ func (m Model) reload() Model {
 		title = m.tasks[visible[m.cursor]].Title
 	}
 
-	tasks, err := Load(m.path)
+	tasks, err := board.Load(m.path)
 	if err != nil {
 		return m
 	}
 	m.tasks = tasks
 	m.undo, m.redo = nil, nil
-	m.saved, _ = mtime(m.path)
+	m.saved, _ = board.ModTime(m.path)
 
 	for row, i := range m.visible() {
 		if m.tasks[i].Title == title {

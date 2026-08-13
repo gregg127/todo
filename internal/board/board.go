@@ -1,4 +1,4 @@
-package main
+package board
 
 // Status is a task's section on the board.
 type Status int
@@ -19,8 +19,20 @@ type Task struct {
 // filtering on status; order within a section is the order in the slice.
 type Board []Task
 
-func (b Board) clone() Board {
+func (b Board) Clone() Board {
 	out := make(Board, len(b))
 	copy(out, b)
 	return out
+}
+
+// SectionName is the heading text for a status, as written to the file.
+func SectionName(s Status) string {
+	switch s {
+	case Doing:
+		return "DOING"
+	case Done:
+		return "DONE"
+	default:
+		return "TODO"
+	}
 }

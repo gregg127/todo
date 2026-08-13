@@ -1,9 +1,15 @@
-package main
+package board
 
 import (
 	"os"
 	"testing"
 )
+
+// emptyBoard is the file Render writes for a board with no tasks.
+const emptyBoard = "## TODO\n\n## DOING\n\n## DONE\n"
+
+// board3 is a board with tasks in all three sections.
+const board3 = "## TODO\n- [ ] one\n- [ ] two\n\n## DOING\n- [ ] three\n\n## DONE\n- [x] four\n"
 
 func TestRenderEmptyBoard(t *testing.T) {
 	if got, want := Render(nil), "## TODO\n\n## DOING\n\n## DONE\n"; got != want {
@@ -75,7 +81,7 @@ func TestParseAndRender(t *testing.T) {
 // The example file is the format's documentation, so it has to be exactly what
 // the app writes: a hand-edit of it must survive a save untouched.
 func TestExampleFileIsWrittenInTheAppsOwnFormat(t *testing.T) {
-	want, err := os.ReadFile("todo-database-example.md")
+	want, err := os.ReadFile("../../docs/todo-database-example.md")
 	if err != nil {
 		t.Fatal(err)
 	}

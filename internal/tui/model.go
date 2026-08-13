@@ -1,6 +1,8 @@
-package main
+package tui
 
 import (
+	"todo/internal/board"
+
 	"fmt"
 	"os"
 	"strings"
@@ -8,9 +10,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 )
-
-// dbFile is the per-directory data file.
-const dbFile = "todo-database.md"
 
 // Modes are exclusive: in insert mode every printable key is text and only
 // Enter and Esc are commands.
@@ -23,7 +22,7 @@ const (
 // Model is the whole application state; Update is the single reducer.
 type Model struct {
 	path  string
-	tasks Board
+	tasks board.Board
 	// cursor indexes the visible task list, not the task slice.
 	cursor int
 	// pending holds an incomplete key sequence (`g`, `d`, `c`). It has no
@@ -44,12 +43,12 @@ type Model struct {
 	// will create a new task at insertAt with status insertStatus.
 	editing      int
 	insertAt     int
-	insertStatus Status
+	insertStatus board.Status
 	// undo is a stack of task snapshots taken before each mutation, redo the
 	// stack of states undone away from. Both are in-memory only and are never
 	// written to disk.
-	undo []Board
-	redo []Board
+	undo []board.Board
+	redo []board.Board
 	// saved is the mtime the app itself last wrote, so the watcher can tell
 	// its own writes from a hand-edit.
 	saved time.Time
@@ -59,7 +58,7 @@ type Model struct {
 // undone. No-op key presses must not call it. A fresh mutation forks the
 // history, so whatever was undone away from is no longer reachable.
 func (m Model) push() Model {
-	m.undo = append(m.undo, m.tasks.clone())
+	m.undo = append(m.undo, m.tasks.Clone())
 	m.redo = nil
 	return m
 }
@@ -70,7 +69,7 @@ func (m Model) pop() Model {
 	if len(m.undo) == 0 {
 		return m
 	}
-	m.redo = append(m.redo, m.tasks.clone())
+	m.redo = append(m.redo, m.tasks.Clone())
 	m.tasks = m.undo[len(m.undo)-1]
 	m.undo = m.undo[:len(m.undo)-1]
 	return m.clampCursor().save().scroll()
@@ -82,7 +81,7 @@ func (m Model) unpop() Model {
 	if len(m.redo) == 0 {
 		return m
 	}
-	m.undo = append(m.undo, m.tasks.clone())
+	m.undo = append(m.undo, m.tasks.Clone())
 	m.tasks = m.redo[len(m.redo)-1]
 	m.redo = m.redo[:len(m.redo)-1]
 	return m.clampCursor().save().scroll()
@@ -90,7 +89,7 @@ func (m Model) unpop() Model {
 
 // save writes the board and records the resulting mtime.
 func (m Model) save() Model {
-	if t, err := Save(m.path, m.tasks); err == nil {
+	if t, err := board.Save(m.path, m.tasks); err == nil {
 		m.saved = t
 	}
 	return m
@@ -99,7 +98,7 @@ func (m Model) save() Model {
 // setStatus moves the task under the cursor to s, landing it at the bottom of
 // the target section, and keeps the cursor on it. Moving a task to the section
 // it is already in changes nothing at all.
-func (m Model) setStatus(s Status) Model {
+func (m Model) setStatus(s board.Status) Model {
 	visible := m.visible()
 	if m.cursor >= len(visible) {
 		return m
@@ -112,7 +111,7 @@ func (m Model) setStatus(s Status) Model {
 	m = m.push()
 	t := m.tasks[i]
 	t.Status = s
-	tasks := append(m.tasks.clone()[:i], m.tasks[i+1:]...)
+	tasks := append(m.tasks.Clone()[:i], m.tasks[i+1:]...)
 	// Last in the slice is last within its section.
 	m.tasks = append(tasks, t)
 	m = m.cursorTo(len(m.tasks) - 1)
@@ -133,7 +132,7 @@ func (m Model) move(delta int) Model {
 		return m
 	}
 	m = m.push()
-	tasks := m.tasks.clone()
+	tasks := m.tasks.Clone()
 	tasks[i], tasks[j] = tasks[j], tasks[i]
 	m.tasks = tasks
 	m.cursor = to
@@ -146,7 +145,7 @@ func (m Model) move(delta int) Model {
 func (m Model) newTask(offset int) Model {
 	visible := m.visible()
 	if len(visible) == 0 {
-		return m.insert(0, Todo)
+		return m.insert(0, board.Todo)
 	}
 	i := visible[m.cursor]
 	return m.insert(i+offset, m.tasks[i].Status)
@@ -171,28 +170,28 @@ func New(path string) (Model, error) {
 	data, err := os.ReadFile(path)
 	switch {
 	case os.IsNotExist(err):
-		if _, err := Save(path, nil); err != nil {
+		if _, err := board.Save(path, nil); err != nil {
 			return Model{}, err
 		}
 	case err != nil:
 		return Model{}, err
 	}
-	if err := Validate(string(data)); err != nil {
+	if err := board.Validate(string(data)); err != nil {
 		return Model{}, fmt.Errorf("%s: %w", path, err)
 	}
-	saved, _ := mtime(path)
-	return Model{path: path, tasks: Parse(string(data)), saved: saved, collapsed: true}, nil
+	saved, _ := board.ModTime(path)
+	return Model{path: path, tasks: board.Parse(string(data)), saved: saved, collapsed: true}, nil
 }
 
 // matches reports whether t survives the current filter.
-func (m Model) matches(t Task) bool {
+func (m Model) matches(t board.Task) bool {
 	q := strings.ToLower(m.filter)
 	return q == "" || strings.Contains(strings.ToLower(t.Title), q)
 }
 
 // count is how many tasks a section holds under the current filter, whether or
 // not the section is collapsed.
-func (m Model) count(s Status) int {
+func (m Model) count(s board.Status) int {
 	n := 0
 	for _, t := range m.tasks {
 		if t.Status == s && m.matches(t) {
@@ -208,8 +207,8 @@ func (m Model) count(s Status) int {
 // cursor until it is expanded again.
 func (m Model) visible() []int {
 	var out []int
-	for _, s := range []Status{Todo, Doing, Done} {
-		if s == Done && m.collapsed {
+	for _, s := range []board.Status{board.Todo, board.Doing, board.Done} {
+		if s == board.Done && m.collapsed {
 			continue
 		}
 		for i, t := range m.tasks {
@@ -230,7 +229,7 @@ func (m Model) jumpSection(delta int) Model {
 	if m.cursor >= len(visible) {
 		return m
 	}
-	sections := []Status{Todo, Doing, Done}
+	sections := []board.Status{board.Todo, board.Doing, board.Done}
 	at := 0
 	for i, s := range sections {
 		if s == m.tasks[visible[m.cursor]].Status {
@@ -282,7 +281,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // insert opens the one-line input to create a task at slice index at with
 // status s.
-func (m Model) insert(at int, s Status) Model {
+func (m Model) insert(at int, s board.Status) Model {
 	m.mode, m.input, m.editing = insertMode, "", -1
 	m.insertAt, m.insertStatus = at, s
 	return m
@@ -307,15 +306,15 @@ func (m Model) confirm() Model {
 		return m
 	}
 	m = m.push()
-	tasks := m.tasks.clone()
+	tasks := m.tasks.Clone()
 	if m.editing >= 0 {
 		tasks[m.editing].Title = title
 		m.tasks = tasks
 		return m.save().scroll()
 	}
-	tasks = append(tasks, Task{})
+	tasks = append(tasks, board.Task{})
 	copy(tasks[m.insertAt+1:], tasks[m.insertAt:])
-	tasks[m.insertAt] = Task{Title: title, Status: m.insertStatus}
+	tasks[m.insertAt] = board.Task{Title: title, Status: m.insertStatus}
 	m.tasks = tasks
 	return m.cursorTo(m.insertAt).save().scroll()
 }
@@ -329,7 +328,7 @@ func (m Model) remove() Model {
 	}
 	m = m.push()
 	i := visible[m.cursor]
-	m.tasks = append(m.tasks.clone()[:i], m.tasks[i+1:]...)
+	m.tasks = append(m.tasks.Clone()[:i], m.tasks[i+1:]...)
 	return m.clampCursor().save().scroll()
 }
 
@@ -446,11 +445,11 @@ func (m Model) key(k string) (tea.Model, tea.Cmd) {
 	case "K":
 		return m.move(-1), nil
 	case "1":
-		return m.setStatus(Todo), nil
+		return m.setStatus(board.Todo), nil
 	case "2":
-		return m.setStatus(Doing), nil
+		return m.setStatus(board.Doing), nil
 	case "3":
-		return m.setStatus(Done), nil
+		return m.setStatus(board.Done), nil
 	}
 	return m.scroll(), nil
 }

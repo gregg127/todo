@@ -1,6 +1,8 @@
-package main
+package tui
 
 import (
+	"todo/internal/board"
+
 	"fmt"
 	"strings"
 
@@ -31,9 +33,9 @@ func (m Model) rows() (rows []string, cursorRow int) {
 	cursorRow = -1
 	visible := m.visible()
 	i := 0
-	for _, s := range []Status{Todo, Doing, Done} {
-		header := fmt.Sprintf("  %s (%d)", sectionName(s), m.count(s))
-		if s == Done && m.collapsed {
+	for _, s := range []board.Status{board.Todo, board.Doing, board.Done} {
+		header := fmt.Sprintf("  %s (%d)", board.SectionName(s), m.count(s))
+		if s == board.Done && m.collapsed {
 			header += " ▸"
 		}
 		rows = append(rows, headerStyle.Render(header))
@@ -49,9 +51,9 @@ func (m Model) rows() (rows []string, cursorRow int) {
 			}
 			style := todoStyle
 			switch s {
-			case Doing:
+			case board.Doing:
 				style = doingStyle
-			case Done:
+			case board.Done:
 				style = doneStyle
 			}
 			if i == m.cursor {
@@ -211,24 +213,13 @@ func (m Model) hints() string {
 	return normalHints
 }
 
-func statusDot(s Status) string {
+func statusDot(s board.Status) string {
 	switch s {
-	case Doing:
+	case board.Doing:
 		return "◐"
-	case Done:
+	case board.Done:
 		return "●"
 	default:
 		return "○"
-	}
-}
-
-func sectionName(s Status) string {
-	switch s {
-	case Doing:
-		return "DOING"
-	case Done:
-		return "DONE"
-	default:
-		return "TODO"
 	}
 }

@@ -1,4 +1,4 @@
-package main
+package board
 
 import (
 	"fmt"
@@ -7,6 +7,9 @@ import (
 	"strings"
 	"time"
 )
+
+// DefaultFile is the per-directory data file.
+const DefaultFile = "todo-database.md"
 
 // Parse reads the recognised structure out of a Markdown board: the exact
 // headings `## TODO`, `## DOING` and `## DONE`, and `- [ ]` / `- [x]` list
@@ -85,7 +88,7 @@ func Render(b Board) string {
 		if i > 0 {
 			sb.WriteString("\n")
 		}
-		sb.WriteString("## " + sectionName(s) + "\n")
+		sb.WriteString("## " + SectionName(s) + "\n")
 		box := "- [ ] "
 		if s == Done {
 			box = "- [x] "
@@ -138,11 +141,11 @@ func Save(path string, b Board) (time.Time, error) {
 	if err := os.Rename(tmp, path); err != nil {
 		return time.Time{}, err
 	}
-	return mtime(path)
+	return ModTime(path)
 }
 
-// mtime is the modification time of path, or the zero time if it is missing.
-func mtime(path string) (time.Time, error) {
+// ModTime is the modification time of path, or the zero time if it is missing.
+func ModTime(path string) (time.Time, error) {
 	fi, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		return time.Time{}, nil

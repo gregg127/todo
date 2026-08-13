@@ -5,6 +5,9 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"todo/internal/board"
+	"todo/internal/tui"
 )
 
 const usage = `usage: todo [file]
@@ -37,11 +40,11 @@ func main() {
 		die("one board file at a time: todo [file]")
 	}
 
-	path := dbFile
+	path := board.DefaultFile
 	if len(args) == 1 {
 		path = args[0]
 	}
-	m, err := New(path)
+	m, err := tui.New(path)
 	if err != nil {
 		die(err)
 	}
