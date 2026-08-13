@@ -670,3 +670,112 @@ func TestHintBarShowsInsertHintsWhileTheInputIsOpen(t *testing.T) {
 		t.Fatalf("hint bar %q did not return to normal mode", got)
 	}
 }
+
+func TestUndoReversesEveryMutation(t *testing.T) {
+	start := "## TODO\n- [ ] one\n- [ ] two\n\n## DOING\n\n## DONE\n"
+	cases := []struct {
+		name string
+		keys []string
+	}{
+		{"status change", []string{"3"}},
+		{"reorder", []string{"J"}},
+		{"add below", []string{"o", "new", "enter"}},
+		{"add above", []string{"O", "new", "enter"}},
+		{"edit", []string{"cc", "backspace", "x", "enter"}},
+		{"delete", []string{"dd"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			write(t, dir, start)
+
+			m := send(New(dir), tc.keys...)
+			if got := file(t, dir); got == start {
+				t.Fatalf("%v did not change anything", tc.keys)
+			}
+
+			m = send(m, "u")
+
+			if got := file(t, dir); got != start {
+				t.Fatalf("after undo file = %q, want %q", got, start)
+			}
+			if !strings.Contains(m.View(), "○ one") || !strings.Contains(m.View(), "○ two") {
+				t.Fatalf("view does not match the restored file:\n%s", m.View())
+			}
+		})
+	}
+}
+
+func TestRepeatedUndoWalksBack(t *testing.T) {
+	dir := t.TempDir()
+	start := "## TODO\n- [ ] one\n\n## DOING\n\n## DONE\n"
+	write(t, dir, start)
+
+	m := send(New(dir), "o", "two", "enter", "o", "three", "enter", "3")
+	m = send(m, "u", "u", "u")
+
+	if got := file(t, dir); got != start {
+		t.Fatalf("after three undos file = %q, want %q", got, start)
+	}
+}
+
+func TestUndoOnAnEmptyStackChangesNothing(t *testing.T) {
+	dir := t.TempDir()
+	m := send(New(dir), "u", "u", "u")
+
+	if got := file(t, dir); got != "" {
+		t.Fatalf("undo on an empty stack wrote %q", got)
+	}
+	if !strings.Contains(m.View(), "TODO (0)") {
+		t.Fatalf("undo on an empty stack broke the view:\n%s", m.View())
+	}
+}
+
+func TestNoOpKeyPressPushesNoSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n\n## DOING\n- [ ] two\n")
+
+	// 2 on a DOING task and K on the first task are both no-ops; a following
+	// u must undo the status change, not one of them.
+	m := send(New(dir), "3")
+	// gg lands on the DOING task; 2 there, and K/J on the only task in its
+	// section, are all no-ops, as is a cancelled input.
+	m = send(m, "gg", "2", "K", "J", "o", "esc")
+	m = send(m, "u")
+
+	want := "## TODO\n- [ ] one\n\n## DOING\n- [ ] two\n\n## DONE\n"
+	if got := file(t, dir); got != want {
+		t.Fatalf("after undo file = %q, want %q", got, want)
+	}
+}
+
+func TestUndoClampsTheCursorIntoTheRestoredList(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n- [ ] three\n")
+
+	// Add a task at the bottom, put the cursor on it, then undo it away.
+	m := send(New(dir), "G", "o", "four", "enter", "u")
+
+	if got := cursorLine(t, m); got != "○ three" {
+		t.Fatalf("cursor on %q after undo, want the last restored task", got)
+	}
+	if strings.Contains(m.View(), "four") {
+		t.Fatalf("undone task still on the board:\n%s", m.View())
+	}
+}
+
+func TestUndoStackIsNeverWrittenToDisk(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n")
+
+	send(New(dir), "3", "u", "3")
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != dbFile {
+		t.Fatalf("undo left something on disk: %v", entries)
+	}
+}

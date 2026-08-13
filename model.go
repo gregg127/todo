@@ -38,9 +38,36 @@ type Model struct {
 	editing      int
 	insertAt     int
 	insertStatus Status
+	// undo is a stack of task snapshots taken before each mutation. It is
+	// in-memory only and is never written to disk.
+	undo []Board
 	// saved is the mtime the app itself last wrote, so the watcher can tell
 	// its own writes from a hand-edit.
 	saved time.Time
+}
+
+// push snapshots the current tasks so the mutation about to happen can be
+// undone. No-op key presses must not call it.
+func (m Model) push() Model {
+	m.undo = append(append([]Board{}, m.undo...), m.tasks.clone())
+	return m
+}
+
+// pop restores the last snapshot. On an empty stack nothing happens at all,
+// on screen or on disk.
+func (m Model) pop() Model {
+	if len(m.undo) == 0 {
+		return m
+	}
+	m.tasks = m.undo[len(m.undo)-1]
+	m.undo = m.undo[:len(m.undo)-1]
+	if n := len(m.visible()); m.cursor > n-1 {
+		m.cursor = n - 1
+	}
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+	return m.save().scroll()
 }
 
 // save writes the board and records the resulting mtime.
@@ -64,6 +91,7 @@ func (m Model) setStatus(s Status) Model {
 		return m
 	}
 
+	m = m.push()
 	t := m.tasks[i]
 	t.Status = s
 	tasks := append(m.tasks.clone()[:i], m.tasks[i+1:]...)
@@ -86,6 +114,7 @@ func (m Model) move(delta int) Model {
 	if m.tasks[i].Status != m.tasks[j].Status {
 		return m
 	}
+	m = m.push()
 	tasks := m.tasks.clone()
 	tasks[i], tasks[j] = tasks[j], tasks[i]
 	m.tasks = tasks
@@ -176,6 +205,7 @@ func (m Model) confirm() Model {
 	if title == "" {
 		return m
 	}
+	m = m.push()
 	tasks := m.tasks.clone()
 	if m.editing >= 0 {
 		tasks[m.editing].Title = title
@@ -196,6 +226,7 @@ func (m Model) remove() Model {
 	if m.cursor >= len(visible) {
 		return m
 	}
+	m = m.push()
 	i := visible[m.cursor]
 	m.tasks = append(m.tasks.clone()[:i], m.tasks[i+1:]...)
 	if m.cursor > len(m.tasks)-1 {
@@ -274,6 +305,8 @@ func (m Model) key(k string) (tea.Model, tea.Cmd) {
 		if n > 0 {
 			m.cursor = n - 1
 		}
+	case "u":
+		return m.pop(), nil
 	case "J":
 		return m.move(1), nil
 	case "K":
