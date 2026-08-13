@@ -84,6 +84,35 @@ func TestExampleFileIsWrittenInTheAppsOwnFormat(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsWhatTheParserKeepsAndRejectsWhatItDrops(t *testing.T) {
+	valid := []string{
+		"",
+		emptyBoard,
+		board3,
+		"## DONE\r\n- [X] windows line endings and an uppercase box\r\n",
+		"## DOING\n- [ ] a\n   \n## TODO\n- [ ] b\n",
+	}
+	for _, text := range valid {
+		if err := Validate(text); err != nil {
+			t.Fatalf("Validate(%q) = %v, want no error", text, err)
+		}
+	}
+
+	invalid := []string{
+		"# my notes\n",
+		"## Todo\n",
+		"## TODO\n* a bullet the parser does not read\n",
+		"- [ ] an item before any heading\n",
+		"## TODO\n- [ ] a\nprose after a task\n",
+		"## TODO\n  - [ ] an indented item\n",
+	}
+	for _, text := range invalid {
+		if err := Validate(text); err == nil {
+			t.Fatalf("Validate(%q) = nil, want an error", text)
+		}
+	}
+}
+
 func TestLoadMissingFileIsEmptyAndNoError(t *testing.T) {
 	b, err := Load(t.TempDir() + "/nope.md")
 	if err != nil {

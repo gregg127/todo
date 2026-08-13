@@ -1,7 +1,8 @@
 package main
 
 import (
-	"path/filepath"
+	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -163,12 +164,24 @@ func (m Model) cursorTo(i int) Model {
 	return m.clampCursor()
 }
 
-// New builds a model rooted at dir, loading ./todo-database.md if it exists.
-func New(dir string) Model {
-	path := filepath.Join(dir, dbFile)
-	tasks, _ := Load(path)
+// New builds a model over the board file at path, creating an empty one if it
+// is not there yet. A file the app cannot read is an error and no model: the
+// board never opens on a file it would damage by saving.
+func New(path string) (Model, error) {
+	data, err := os.ReadFile(path)
+	switch {
+	case os.IsNotExist(err):
+		if _, err := Save(path, nil); err != nil {
+			return Model{}, err
+		}
+	case err != nil:
+		return Model{}, err
+	}
+	if err := Validate(string(data)); err != nil {
+		return Model{}, fmt.Errorf("%s: %w", path, err)
+	}
 	saved, _ := mtime(path)
-	return Model{path: path, tasks: tasks, saved: saved, collapsed: true}
+	return Model{path: path, tasks: Parse(string(data)), saved: saved, collapsed: true}, nil
 }
 
 // matches reports whether t survives the current filter.

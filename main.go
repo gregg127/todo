@@ -7,9 +7,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-const usage = `usage: todo
+const usage = `usage: todo [file]
 
-An interactive task board stored in ./todo-database.md.
+An interactive task board stored in a Markdown file, ./todo-database.md
+unless another one is named. The file is created if it is not there yet;
+a file the board cannot read is reported and nothing starts.
 
   j / k        move the cursor down / up
   gg / G       jump to the first / last task
@@ -24,20 +26,31 @@ An interactive task board stored in ./todo-database.md.
 `
 
 func main() {
-	for _, arg := range os.Args[1:] {
+	args := os.Args[1:]
+	for _, arg := range args {
 		if arg == "--help" || arg == "-h" {
 			fmt.Print(usage)
 			return
 		}
 	}
+	if len(args) > 1 {
+		die("one board file at a time: todo [file]")
+	}
 
-	dir, err := os.Getwd()
+	path := dbFile
+	if len(args) == 1 {
+		path = args[0]
+	}
+	m, err := New(path)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "todo:", err)
-		os.Exit(1)
+		die(err)
 	}
-	if _, err := tea.NewProgram(New(dir), tea.WithAltScreen()).Run(); err != nil {
-		fmt.Fprintln(os.Stderr, "todo:", err)
-		os.Exit(1)
+	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
+		die(err)
 	}
+}
+
+func die(v any) {
+	fmt.Fprintln(os.Stderr, "todo:", v)
+	os.Exit(1)
 }

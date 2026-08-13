@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,20 +13,13 @@ import (
 // items beneath them. Everything else — prose, blank lines, other headings,
 // items before the first heading — is dropped. The section wins over the
 // checkbox, so `- [x]` under `## TODO` is a TODO task.
-func Parse(s string) Board {
+func Parse(text string) Board {
 	var b Board
 	section := Status(-1)
-	for _, line := range strings.Split(s, "\n") {
+	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimSuffix(line, "\r")
-		switch strings.TrimRight(line, " \t") {
-		case "## TODO":
-			section = Todo
-			continue
-		case "## DOING":
-			section = Doing
-			continue
-		case "## DONE":
-			section = Done
+		if s, ok := heading(line); ok {
+			section = s
 			continue
 		}
 		if section < 0 {
@@ -36,6 +30,42 @@ func Parse(s string) Board {
 		}
 	}
 	return b
+}
+
+// Validate reports the first line of a board file the app cannot read. Blank
+// lines, the three headings and the task items beneath them are the whole
+// format; Parse drops anything else, and the next save would then write the
+// file back without it. Rather than eat somebody's notes the app refuses to
+// open the file at all.
+func Validate(text string) error {
+	inSection := false
+	for i, line := range strings.Split(text, "\n") {
+		line = strings.TrimSuffix(line, "\r")
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if _, ok := heading(line); ok {
+			inSection = true
+			continue
+		}
+		if _, ok := parseItem(line); !ok || !inSection {
+			return fmt.Errorf("line %d: %q is not a task or a section heading", i+1, line)
+		}
+	}
+	return nil
+}
+
+// heading maps a section heading to its status.
+func heading(line string) (Status, bool) {
+	switch strings.TrimRight(line, " \t") {
+	case "## TODO":
+		return Todo, true
+	case "## DOING":
+		return Doing, true
+	case "## DONE":
+		return Done, true
+	}
+	return 0, false
 }
 
 func parseItem(line string) (string, bool) {
