@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func TestRenderEmptyBoard(t *testing.T) {
 	if got, want := Render(nil), "## TODO\n\n## DOING\n\n## DONE\n"; got != want {
@@ -66,6 +69,18 @@ func TestParseAndRender(t *testing.T) {
 				t.Fatalf("round-trip not stable: %q then %q", got, round)
 			}
 		})
+	}
+}
+
+// The example file is the format's documentation, so it has to be exactly what
+// the app writes: a hand-edit of it must survive a save untouched.
+func TestExampleFileIsWrittenInTheAppsOwnFormat(t *testing.T) {
+	want, err := os.ReadFile("todo-database-example.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := Render(Parse(string(want))); got != string(want) {
+		t.Fatalf("example file is not what Render writes:\ngot  %q\nwant %q", got, want)
 	}
 }
 
