@@ -2,7 +2,9 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 )
 
 // Parse reads the recognised structure out of a Markdown board: the exact
@@ -78,4 +80,45 @@ func Load(path string) (Board, error) {
 		return nil, err
 	}
 	return Parse(string(data)), nil
+}
+
+// Save writes the board to path atomically: a temp file in the same directory,
+// written, fsynced and renamed over the target. It returns the mtime of the
+// file it just wrote.
+func Save(path string, b Board) (time.Time, error) {
+	dir := filepath.Dir(path)
+	f, err := os.CreateTemp(dir, ".todo-*.md")
+	if err != nil {
+		return time.Time{}, err
+	}
+	tmp := f.Name()
+	defer os.Remove(tmp)
+
+	if _, err := f.WriteString(Render(b)); err != nil {
+		f.Close()
+		return time.Time{}, err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return time.Time{}, err
+	}
+	if err := f.Close(); err != nil {
+		return time.Time{}, err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return time.Time{}, err
+	}
+	return mtime(path)
+}
+
+// mtime is the modification time of path, or the zero time if it is missing.
+func mtime(path string) (time.Time, error) {
+	fi, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, err
+	}
+	return fi.ModTime(), nil
 }

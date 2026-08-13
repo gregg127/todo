@@ -379,3 +379,96 @@ func TestNoHexColorsInTheCodebase(t *testing.T) {
 		}
 	}
 }
+
+func TestStatusChangeMovesTheTaskToTheBottomOfTheTargetSection(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n\n## DONE\n- [x] old\n")
+	m := send(New(dir), "3")
+
+	if got, want := file(t, dir), "## TODO\n- [ ] two\n\n## DOING\n\n## DONE\n- [x] old\n- [x] one\n"; got != want {
+		t.Fatalf("file = %q, want %q", got, want)
+	}
+	if !strings.Contains(m.View(), "TODO (1)") || !strings.Contains(m.View(), "DONE (2)") {
+		t.Fatalf("counts did not update:\n%s", m.View())
+	}
+	if got := cursorLine(t, m); got != "● one" {
+		t.Fatalf("cursor did not follow the moved task, it is on %q", got)
+	}
+}
+
+func TestStatusChangeToTheCurrentSectionIsANoOp(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n")
+	before := file(t, dir)
+
+	m := send(New(dir), "1")
+
+	if got := file(t, dir); got != before {
+		t.Fatalf("no-op status change rewrote the file: %q", got)
+	}
+	if got := cursorLine(t, m); got != "○ one" {
+		t.Fatalf("no-op status change moved the cursor to %q", got)
+	}
+}
+
+func TestEveryStatusChangeIsPersisted(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n")
+
+	m := send(New(dir), "2", "gg", "3")
+
+	want := "## TODO\n\n## DOING\n- [ ] one\n\n## DONE\n- [x] two\n"
+	if got := file(t, dir); got != want {
+		t.Fatalf("file = %q, want %q", got, want)
+	}
+	if !strings.Contains(m.View(), "◐ one") || !strings.Contains(m.View(), "● two") {
+		t.Fatalf("view and file disagree:\n%s", m.View())
+	}
+}
+
+func TestFirstMutationCreatesTheFile(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n")
+	m := New(dir)
+	// The board is loaded; the file is then gone, as it would be in a fresh
+	// directory.
+	if err := os.Remove(filepath.Join(dir, dbFile)); err != nil {
+		t.Fatal(err)
+	}
+
+	send(m, "3")
+
+	if got, want := file(t, dir), "## TODO\n\n## DOING\n\n## DONE\n- [x] one\n"; got != want {
+		t.Fatalf("the first mutation did not create the file: %q", got)
+	}
+}
+
+func TestSaveLeavesNoTempFilesBehind(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n")
+
+	send(New(dir), "2", "1", "3")
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != dbFile {
+		t.Fatalf("directory contains more than the todo file: %v", entries)
+	}
+}
+
+func TestTheAppRecordsTheMtimeOfItsOwnSave(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n")
+
+	m := send(New(dir), "3")
+
+	fi, err := os.Stat(filepath.Join(dir, dbFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.saved.Equal(fi.ModTime()) {
+		t.Fatalf("recorded mtime %v, file mtime %v", m.saved, fi.ModTime())
+	}
+}

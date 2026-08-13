@@ -2,6 +2,7 @@ package main
 
 import (
 	"path/filepath"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -21,6 +22,50 @@ type Model struct {
 	// width and height come from tea.WindowSizeMsg; offset is the first
 	// board row on screen.
 	width, height, offset int
+	// saved is the mtime the app itself last wrote, so the watcher can tell
+	// its own writes from a hand-edit.
+	saved time.Time
+}
+
+// save writes the board and records the resulting mtime.
+func (m Model) save() Model {
+	if t, err := Save(m.path, m.tasks); err == nil {
+		m.saved = t
+	}
+	return m
+}
+
+// setStatus moves the task under the cursor to s, landing it at the bottom of
+// the target section, and keeps the cursor on it. Moving a task to the section
+// it is already in changes nothing at all.
+func (m Model) setStatus(s Status) Model {
+	visible := m.visible()
+	if m.cursor >= len(visible) {
+		return m
+	}
+	i := visible[m.cursor]
+	if m.tasks[i].Status == s {
+		return m
+	}
+
+	t := m.tasks[i]
+	t.Status = s
+	tasks := append(m.tasks.clone()[:i], m.tasks[i+1:]...)
+	// Last in the slice is last within its section.
+	m.tasks = append(tasks, t)
+	m = m.cursorTo(len(m.tasks) - 1)
+	return m.save().scroll()
+}
+
+// cursorTo puts the cursor on the task at index i in the task slice.
+func (m Model) cursorTo(i int) Model {
+	for row, idx := range m.visible() {
+		if idx == i {
+			m.cursor = row
+			break
+		}
+	}
+	return m
 }
 
 // New builds a model rooted at dir, loading ./todo-database.md if it exists.
@@ -87,6 +132,12 @@ func (m Model) key(k string) (tea.Model, tea.Cmd) {
 		if n > 0 {
 			m.cursor = n - 1
 		}
+	case "1":
+		return m.setStatus(Todo), nil
+	case "2":
+		return m.setStatus(Doing), nil
+	case "3":
+		return m.setStatus(Done), nil
 	}
 	return m.scroll(), nil
 }
