@@ -141,3 +141,117 @@ func TestEmptyFileIsAnEmptyBoard(t *testing.T) {
 		t.Fatalf("empty file did not yield an empty board:\n%s", v)
 	}
 }
+
+// cursorLine returns the task line marked with the cursor gutter, or "" if
+// nothing is marked.
+func cursorLine(t *testing.T, m Model) string {
+	t.Helper()
+	for _, line := range strings.Split(m.View(), "\n") {
+		if strings.HasPrefix(line, "▸") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "▸"))
+		}
+	}
+	return ""
+}
+
+// board3 is a board with tasks in all three sections.
+const board3 = "## TODO\n- [ ] one\n- [ ] two\n\n## DOING\n- [ ] three\n\n## DONE\n- [x] four\n"
+
+func newBoard3(t *testing.T) (Model, string) {
+	t.Helper()
+	dir := t.TempDir()
+	write(t, dir, board3)
+	return New(dir), dir
+}
+
+func TestCursorStartsOnTheFirstTask(t *testing.T) {
+	m, _ := newBoard3(t)
+	if got := cursorLine(t, m); got != "○ one" {
+		t.Fatalf("cursor on %q, want %q", got, "○ one")
+	}
+}
+
+func TestCursorMovesAcrossSectionBoundaries(t *testing.T) {
+	m, _ := newBoard3(t)
+
+	for _, want := range []string{"○ two", "◐ three", "● four"} {
+		m = send(m, "j")
+		if got := cursorLine(t, m); got != want {
+			t.Fatalf("after j cursor on %q, want %q", got, want)
+		}
+	}
+	for _, want := range []string{"◐ three", "○ two", "○ one"} {
+		m = send(m, "k")
+		if got := cursorLine(t, m); got != want {
+			t.Fatalf("after k cursor on %q, want %q", got, want)
+		}
+	}
+}
+
+func TestCursorDoesNotWrap(t *testing.T) {
+	m, _ := newBoard3(t)
+
+	m = send(m, "k", "k")
+	if got := cursorLine(t, m); got != "○ one" {
+		t.Fatalf("k on the first task moved to %q", got)
+	}
+
+	m = send(m, "G", "j", "j")
+	if got := cursorLine(t, m); got != "● four" {
+		t.Fatalf("j on the last task moved to %q", got)
+	}
+}
+
+func TestGGAndG(t *testing.T) {
+	m, _ := newBoard3(t)
+
+	m = send(m, "G")
+	if got := cursorLine(t, m); got != "● four" {
+		t.Fatalf("G went to %q, want the last task", got)
+	}
+	m = send(m, "gg")
+	if got := cursorLine(t, m); got != "○ one" {
+		t.Fatalf("gg went to %q, want the first task", got)
+	}
+}
+
+func TestPendingGIsCancelledAndSwallowsTheNextKey(t *testing.T) {
+	m, _ := newBoard3(t)
+
+	// g then j: the sequence is cancelled and the j is discarded.
+	m = send(m, "g", "j")
+	if got := cursorLine(t, m); got != "○ one" {
+		t.Fatalf("cancelling key was re-dispatched, cursor on %q", got)
+	}
+	// The pending prefix is gone, so the next j moves normally.
+	m = send(m, "j")
+	if got := cursorLine(t, m); got != "○ two" {
+		t.Fatalf("after a cancelled sequence j moved to %q", got)
+	}
+}
+
+func TestPendingPrefixSurvivesUnrelatedMessages(t *testing.T) {
+	m, _ := newBoard3(t)
+	m = send(m, "G", "g")
+
+	// No timer: any number of non-key messages leave the g pending.
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = tm.(Model)
+
+	m = send(m, "g")
+	if got := cursorLine(t, m); got != "○ one" {
+		t.Fatalf("pending g did not survive, cursor on %q", got)
+	}
+}
+
+func TestCursorMovementOnAnEmptyBoardIsHarmless(t *testing.T) {
+	dir := t.TempDir()
+	m := send(New(dir), "j", "k", "G", "gg")
+
+	if got := cursorLine(t, m); got != "" {
+		t.Fatalf("empty board rendered a cursor line %q", got)
+	}
+	if !strings.Contains(m.View(), "TODO (0)") {
+		t.Fatalf("empty board view broke:\n%s", m.View())
+	}
+}
