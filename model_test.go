@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -887,5 +888,122 @@ func TestNAndNAreNotBound(t *testing.T) {
 	}
 	if got := cursorLine(t, m); got != "○ Write docs" {
 		t.Fatalf("n/N moved the cursor to %q", got)
+	}
+}
+
+// poll sends one watcher tick.
+func poll(m Model) Model {
+	tm, _ := m.Update(tickMsg(time.Now()))
+	return tm.(Model)
+}
+
+func TestTickerFiresAboutOncePerSecond(t *testing.T) {
+	if pollInterval < 500*time.Millisecond || pollInterval > 2*time.Second {
+		t.Fatalf("poll interval is %v, want about a second", pollInterval)
+	}
+	if New(t.TempDir()).Init() == nil {
+		t.Fatal("the model starts no ticker")
+	}
+	tm, cmd := New(t.TempDir()).Update(tickMsg(time.Now()))
+	if cmd == nil {
+		t.Fatal("a tick does not schedule the next tick")
+	}
+	_ = tm
+}
+
+func TestExternalEditIsPickedUpOnTheNextTick(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n")
+	m := New(dir)
+
+	write(t, dir, "## TODO\n- [ ] one\n- [ ] added in vim\n")
+	m = poll(m)
+
+	if !strings.Contains(m.View(), "○ added in vim") || !strings.Contains(m.View(), "TODO (2)") {
+		t.Fatalf("the hand-edit was not picked up:\n%s", m.View())
+	}
+}
+
+func TestOwnWritesNeverTriggerAReload(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n- [ ] three\n")
+	m := New(dir)
+
+	m = send(m, "j")
+	for i := 0; i < 5; i++ {
+		m = send(m, "J", "K")
+		m = poll(m)
+		if got := cursorLine(t, m); got != "○ two" {
+			t.Fatalf("a poll after the app's own write moved the cursor to %q", got)
+		}
+	}
+	// The undo stack survives, so no reload happened.
+	m = send(m, "u")
+	if !strings.Contains(m.View(), "○ two") {
+		t.Fatalf("the undo stack was cleared by the app's own writes:\n%s", m.View())
+	}
+}
+
+func TestReloadKeepsTheCursorOnTheSameTask(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n- [ ] three\n")
+	m := send(New(dir), "j")
+
+	write(t, dir, "## TODO\n- [ ] zero\n- [ ] one\n- [ ] two\n- [ ] three\n")
+	m = poll(m)
+
+	if got := cursorLine(t, m); got != "○ two" {
+		t.Fatalf("cursor on %q after reload, want the task it was on", got)
+	}
+}
+
+func TestReloadClampsTheIndexWhenTheTaskIsGone(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n- [ ] three\n")
+	m := send(New(dir), "G")
+
+	write(t, dir, "## TODO\n- [ ] one\n")
+	m = poll(m)
+
+	if got := cursorLine(t, m); got != "○ one" {
+		t.Fatalf("cursor on %q after reload, want it clamped into the new list", got)
+	}
+}
+
+func TestReloadEmptiesTheUndoStack(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n")
+	m := send(New(dir), "3")
+
+	edited := "## TODO\n- [ ] hand written\n"
+	write(t, dir, edited)
+	m = poll(m)
+	m = send(m, "u")
+
+	if !strings.Contains(m.View(), "○ hand written") {
+		t.Fatalf("undo after a reload clobbered the hand-edit:\n%s", m.View())
+	}
+	if got := file(t, dir); got != edited {
+		t.Fatalf("undo after a reload rewrote the file: %q", got)
+	}
+}
+
+func TestHandTickedBoxReloadsAsTodoAndIsNormalizedOnTheNextSave(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n")
+	m := New(dir)
+
+	write(t, dir, "## TODO\n- [x] one\n- [ ] two\n")
+	m = poll(m)
+
+	if !strings.Contains(m.View(), "○ one") || !strings.Contains(m.View(), "TODO (2)") {
+		t.Fatalf("the hand-ticked box did not reload as a TODO task:\n%s", m.View())
+	}
+
+	m = send(m, "G", "3")
+
+	want := "## TODO\n- [ ] one\n\n## DOING\n\n## DONE\n- [x] two\n"
+	if got := file(t, dir); got != want {
+		t.Fatalf("the next save did not normalize the file: %q, want %q", got, want)
 	}
 }

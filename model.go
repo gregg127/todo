@@ -146,7 +146,8 @@ func (m Model) cursorTo(i int) Model {
 func New(dir string) Model {
 	path := filepath.Join(dir, dbFile)
 	tasks, _ := Load(path)
-	return Model{path: path, tasks: tasks}
+	saved, _ := mtime(path)
+	return Model{path: path, tasks: tasks, saved: saved}
 }
 
 // visible lists indexes into m.tasks in display order: TODO, then DOING, then
@@ -180,10 +181,17 @@ func (m Model) clampCursor() Model {
 	return m
 }
 
-func (m Model) Init() tea.Cmd { return nil }
+func (m Model) Init() tea.Cmd { return tick() }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tickMsg:
+		// The app's own writes update m.saved, so only somebody else's
+		// write reloads the board.
+		if m.changedOnDisk() {
+			return m.reload(), tick()
+		}
+		return m, tick()
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		return m.scroll(), nil
