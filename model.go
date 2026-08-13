@@ -17,9 +17,11 @@ type Model struct {
 	tasks Board
 }
 
-// New builds a model rooted at dir.
+// New builds a model rooted at dir, loading ./todo-database.md if it exists.
 func New(dir string) Model {
-	return Model{path: filepath.Join(dir, dbFile)}
+	path := filepath.Join(dir, dbFile)
+	tasks, _ := Load(path)
+	return Model{path: path, tasks: tasks}
 }
 
 func (m Model) Init() tea.Cmd { return nil }
@@ -39,8 +41,24 @@ func (m Model) View() string {
 	var b strings.Builder
 	for _, s := range []Status{Todo, Doing, Done} {
 		fmt.Fprintf(&b, "%s (%d)\n", sectionName(s), m.tasks.count(s))
+		for _, t := range m.tasks {
+			if t.Status == s {
+				fmt.Fprintf(&b, "%s %s\n", statusDot(s), t.Title)
+			}
+		}
 	}
 	return b.String()
+}
+
+func statusDot(s Status) string {
+	switch s {
+	case Doing:
+		return "◐"
+	case Done:
+		return "●"
+	default:
+		return "○"
+	}
 }
 
 func sectionName(s Status) string {

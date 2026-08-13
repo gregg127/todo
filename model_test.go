@@ -98,3 +98,46 @@ func TestLaunchAndQuitWritesNothing(t *testing.T) {
 		t.Fatalf("directory not left untouched: %v", entries)
 	}
 }
+
+// write puts contents into dir's todo file.
+func write(t *testing.T, dir, contents string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, dbFile), []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestExistingFileIsLoadedOntoTheBoard(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] write tests\n- [ ] ship it\n\n## DOING\n- [ ] refactor\n\n## DONE\n- [x] design\n")
+
+	v := New(dir).View()
+
+	for _, want := range []string{"TODO (2)", "DOING (1)", "DONE (1)", "○ write tests", "○ ship it", "◐ refactor", "● design"} {
+		if !strings.Contains(v, want) {
+			t.Fatalf("view missing %q:\n%s", want, v)
+		}
+	}
+}
+
+func TestTickedBoxUnderTodoLoadsAsTodo(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [x] hand ticked\n")
+
+	v := New(dir).View()
+
+	if !strings.Contains(v, "TODO (1)") || !strings.Contains(v, "○ hand ticked") {
+		t.Fatalf("view did not treat the ticked item as TODO:\n%s", v)
+	}
+}
+
+func TestEmptyFileIsAnEmptyBoard(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "")
+
+	v := New(dir).View()
+
+	if !strings.Contains(v, "TODO (0)") || !strings.Contains(v, "DONE (0)") {
+		t.Fatalf("empty file did not yield an empty board:\n%s", v)
+	}
+}
