@@ -1,5 +1,7 @@
 # todo
 
+Vibe coded for my personal use.
+
 An interactive task board in the terminal, stored as a Markdown file you can also
 hand-edit. Vim-style keys, three sections — TODO, DOING, DONE.
 
