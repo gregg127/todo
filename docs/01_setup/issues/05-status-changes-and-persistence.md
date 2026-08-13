@@ -5,10 +5,10 @@
 The first mutation, and with it the whole write path.
 
 `1`, `2` and `3` move the task under the cursor to TODO, DOING and DONE. The moved task
-lands at the **bottom** of the target section, so DONE reads as a chronicle of what was
-finished, in order. The cursor follows the moved task to its new position, so the user can
+lands at the **top** of the target section, so DONE leads with what was finished most
+recently. The cursor follows the moved task to its new position, so the user can
 immediately act on it again (`3` then later `dd`). Pressing the number of the section a task
-is already in is a no-op: it must not re-append the task to the bottom of its own section.
+is already in is a no-op: it must not re-insert the task at the top of its own section.
 The status dot and the section counts update immediately.
 
 Every mutation is written to disk immediately, using an atomic write: create a temp file in
@@ -26,7 +26,7 @@ Concurrent-write races with an editor are accepted and unmitigated: last write w
 ## Acceptance criteria
 
 - [ ] `1`/`2`/`3` move the task under the cursor to TODO/DOING/DONE
-- [ ] The moved task lands at the bottom of the target section
+- [ ] The moved task lands at the top of the target section
 - [ ] The cursor follows the moved task
 - [ ] Pressing the number of the task's current section changes nothing at all
 - [ ] Status dot and both affected section counts update immediately

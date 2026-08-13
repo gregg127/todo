@@ -103,8 +103,8 @@ renders correctly anywhere and stays readable when the app is not running.
 
 24. As a developer, I want `1`, `2` and `3` to move the task under the cursor to TODO,
     DOING and DONE, so that finishing a task is one keypress rather than two.
-25. As a developer, I want a task moved to a new section to land at the bottom of that
-    section, so that DONE reads as a chronicle of what I finished, in order.
+25. As a developer, I want a task moved to a new section to land at the top of that
+    section, so that DONE leads with what I finished most recently.
 26. As a developer, I want pressing the number of the section a task is already in to be a
     no-op, so that a mistyped key does not silently reorder my list.
 27. As a developer, I want the cursor to follow the task I just moved, so that I can
@@ -258,8 +258,8 @@ Four units, in dependency order. Only the last one talks to Bubble Tea.
   **no timeout**: a pending `g`/`d`/`c` stays pending until the next key, which either
   completes the sequence or cancels it (and is then discarded, not re-dispatched). This
   costs one field and no timers.
-- `1`/`2`/`3` append to the end of the target section. Pressing the number of the task's
-  current section is a no-op — it must not re-append the task to the bottom of its own
+- `1`/`2`/`3` insert at the start of the target section. Pressing the number of the task's
+  current section is a no-op — it must not re-insert the task at the top of its own
   section, and it must not push an undo snapshot.
 - `J`/`K` swap with the adjacent task **of the same status**; at a section boundary they do
   nothing.

@@ -513,12 +513,12 @@ func TestNoHexColorsInTheCodebase(t *testing.T) {
 	}
 }
 
-func TestStatusChangeMovesTheTaskToTheBottomOfTheTargetSection(t *testing.T) {
+func TestStatusChangeMovesTheTaskToTheTopOfTheTargetSection(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n\n## DONE\n- [x] old\n")
 	m := send(open(t, dir), "C", "3")
 
-	if got, want := file(t, dir), "## TODO\n- [ ] two\n\n## DOING\n\n## DONE\n- [x] old\n- [x] one\n"; got != want {
+	if got, want := file(t, dir), "## TODO\n- [ ] two\n\n## DOING\n\n## DONE\n- [x] one\n- [x] old\n"; got != want {
 		t.Fatalf("file = %q, want %q", got, want)
 	}
 	if !strings.Contains(m.View(), "TODO (1)") || !strings.Contains(m.View(), "DONE (2)") {
@@ -1101,7 +1101,7 @@ func TestActingOnAFilteredTaskAndTheFilterPersists(t *testing.T) {
 
 	m := send(open(t, dir), "/", "wri", "enter", "3")
 
-	want := "## TODO\n- [ ] ship it\n\n## DOING\n- [ ] write tests\n\n## DONE\n- [x] design\n- [x] Write docs\n"
+	want := "## TODO\n- [ ] ship it\n\n## DOING\n- [ ] write tests\n\n## DONE\n- [x] Write docs\n- [x] design\n"
 	if got := file(t, dir); got != want {
 		t.Fatalf("file = %q, want %q", got, want)
 	}

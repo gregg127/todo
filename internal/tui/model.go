@@ -95,7 +95,7 @@ func (m Model) save() Model {
 	return m
 }
 
-// setStatus moves the task under the cursor to s, landing it at the bottom of
+// setStatus moves the task under the cursor to s, landing it at the top of
 // the target section, and keeps the cursor on it. Moving a task to the section
 // it is already in changes nothing at all.
 func (m Model) setStatus(s board.Status) Model {
@@ -112,9 +112,9 @@ func (m Model) setStatus(s board.Status) Model {
 	t := m.tasks[i]
 	t.Status = s
 	tasks := append(m.tasks.Clone()[:i], m.tasks[i+1:]...)
-	// Last in the slice is last within its section.
-	m.tasks = append(tasks, t)
-	m = m.cursorTo(len(m.tasks) - 1)
+	// First in the slice is first within its section.
+	m.tasks = append(board.Board{t}, tasks...)
+	m = m.cursorTo(0)
 	return m.save().scroll()
 }
 
