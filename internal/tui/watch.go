@@ -35,8 +35,12 @@ func (m Model) reload() Model {
 
 	tasks, err := board.Load(m.path)
 	if err != nil {
+		// Hold the board as it is and stop saving until the file reads again,
+		// rather than rewrite it without the lines the parser cannot read.
+		m.readErr = err.Error()
 		return m
 	}
+	m.readErr = ""
 	m.tasks = tasks
 	m.undo, m.redo = nil, nil
 	m.saved = board.ModTime(m.path)

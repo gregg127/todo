@@ -83,7 +83,7 @@ func parseItem(line string) (string, bool) {
 // one blank line between sections, trailing newline at end of file.
 func Render(b Board) string {
 	var sb strings.Builder
-	for i, s := range []Status{Todo, Doing, Done} {
+	for i, s := range Statuses {
 		if i > 0 {
 			sb.WriteString("\n")
 		}
@@ -101,7 +101,9 @@ func Render(b Board) string {
 	return sb.String()
 }
 
-// Load parses the board at path. A missing file is an empty board, not an error.
+// Load parses the board at path, refusing a file the parser cannot read whole:
+// a save would rewrite it without the parts it did not understand. A missing
+// file is an empty board, not an error.
 func Load(path string) (Board, error) {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
@@ -109,6 +111,9 @@ func Load(path string) (Board, error) {
 	}
 	if err != nil {
 		return nil, err
+	}
+	if err := Validate(string(data)); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	return Parse(string(data)), nil
 }
@@ -124,6 +129,15 @@ func Save(path string, b Board) (time.Time, error) {
 	tmp := f.Name()
 	defer os.Remove(tmp)
 
+	// CreateTemp makes the file 0600; keep the board's own permissions.
+	mode := os.FileMode(0o644)
+	if fi, err := os.Stat(path); err == nil {
+		mode = fi.Mode()
+	}
+	if err := f.Chmod(mode); err != nil {
+		f.Close()
+		return time.Time{}, err
+	}
 	if _, err := f.WriteString(Render(b)); err != nil {
 		f.Close()
 		return time.Time{}, err

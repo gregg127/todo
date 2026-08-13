@@ -11,6 +11,9 @@ const (
 	Done
 )
 
+// Statuses is every section, in board order.
+var Statuses = []Status{Todo, Doing, Done}
+
 // Task is a single line on the board.
 type Task struct {
 	Title  string

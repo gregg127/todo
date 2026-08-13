@@ -16,14 +16,16 @@ An interactive task board stored in a Markdown file, ./todo-database.md
 unless another one is named. The file is created if it is not there yet;
 a file the board cannot read is reported and nothing starts.
 
-  j / k        move the cursor down / up
+  j / k        move the cursor down / up (also ↓ / ↑)
   gg / G       jump to the first / last task
+  { / }        jump to the previous / next section
   1 / 2 / 3    move the task to TODO / DOING / DONE
   J / K        move the task down / up within its section
   o / O        add a task below / above the cursor
   cc           edit the task under the cursor
   dd           delete the task under the cursor
-  u            undo the last change
+  C            fold / unfold the DONE section
+  u / r        undo / redo the last change
   /            filter tasks, esc clears
   q            quit
 `

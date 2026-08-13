@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -53,6 +52,10 @@ type Model struct {
 	// saved is the mtime the app itself last wrote, so the watcher can tell
 	// its own writes from a hand-edit.
 	saved time.Time
+	// readErr is set when a hand-edit left the file unreadable. Saving is off
+	// while it is: the board on screen no longer describes the file, and
+	// writing it would delete whatever the parser could not read.
+	readErr string
 }
 
 // push snapshots the current tasks so the mutation about to happen can be
@@ -89,21 +92,33 @@ func (m Model) unpop() Model {
 }
 
 func (m Model) save() Model {
+	if m.readErr != "" {
+		return m
+	}
 	if t, err := board.Save(m.path, m.tasks); err == nil {
 		m.saved = t
 	}
 	return m
 }
 
+// selected is the index into m.tasks of the task under the cursor, false when
+// the cursor is on no task — an empty board, or everything filtered away.
+func (m Model) selected() (int, bool) {
+	visible := m.visible()
+	if m.cursor < 0 || m.cursor >= len(visible) {
+		return 0, false
+	}
+	return visible[m.cursor], true
+}
+
 // setStatus moves the task under the cursor to s, landing it at the top of
 // the target section, and keeps the cursor on it. Moving a task to the section
 // it is already in changes nothing at all.
 func (m Model) setStatus(s board.Status) Model {
-	visible := m.visible()
-	if m.cursor >= len(visible) {
+	i, ok := m.selected()
+	if !ok {
 		return m
 	}
-	i := visible[m.cursor]
 	if m.tasks[i].Status == s {
 		return m
 	}
@@ -142,11 +157,10 @@ func (m Model) move(delta int) Model {
 // (offset 0) the cursor, in the cursor's section. On an empty board it creates
 // the first TODO task.
 func (m Model) newTask(offset int) Model {
-	visible := m.visible()
-	if len(visible) == 0 {
+	i, ok := m.selected()
+	if !ok {
 		return m.insert(0, board.Todo)
 	}
-	i := visible[m.cursor]
 	return m.insert(i+offset, m.tasks[i].Status)
 }
 
@@ -166,20 +180,16 @@ func (m Model) cursorTo(i int) Model {
 // is not there yet. A file the app cannot read is an error and no model: the
 // board never opens on a file it would damage by saving.
 func New(path string) (Model, error) {
-	data, err := os.ReadFile(path)
-	switch {
-	case os.IsNotExist(err):
+	tasks, err := board.Load(path)
+	if err != nil {
+		return Model{}, err
+	}
+	if _, err := os.Stat(path); os.IsNotExist(err) {
 		if _, err := board.Save(path, nil); err != nil {
 			return Model{}, err
 		}
-	case err != nil:
-		return Model{}, err
 	}
-	if err := board.Validate(string(data)); err != nil {
-		return Model{}, fmt.Errorf("%s: %w", path, err)
-	}
-	saved := board.ModTime(path)
-	return Model{path: path, tasks: board.Parse(string(data)), saved: saved, collapsed: true}, nil
+	return Model{path: path, tasks: tasks, saved: board.ModTime(path), collapsed: true}, nil
 }
 
 func (m Model) matches(t board.Task) bool {
@@ -205,7 +215,7 @@ func (m Model) count(s board.Status) int {
 // cursor until it is expanded again.
 func (m Model) visible() []int {
 	var out []int
-	for _, s := range []board.Status{board.Todo, board.Doing, board.Done} {
+	for _, s := range board.Statuses {
 		if s == board.Done && m.collapsed {
 			continue
 		}
@@ -227,7 +237,7 @@ func (m Model) jumpSection(delta int) Model {
 	if m.cursor >= len(visible) {
 		return m
 	}
-	sections := []board.Status{board.Todo, board.Doing, board.Done}
+	sections := board.Statuses
 	at := 0
 	for i, s := range sections {
 		if s == m.tasks[visible[m.cursor]].Status {
@@ -286,11 +296,11 @@ func (m Model) insert(at int, s board.Status) Model {
 
 // edit opens the one-line input prefilled with the current task's text.
 func (m Model) edit() Model {
-	visible := m.visible()
-	if m.cursor >= len(visible) {
+	i, ok := m.selected()
+	if !ok {
 		return m
 	}
-	m.mode, m.editing = insertMode, visible[m.cursor]
+	m.mode, m.editing = insertMode, i
 	m.input = m.tasks[m.editing].Title
 	return m
 }
@@ -316,12 +326,11 @@ func (m Model) confirm() Model {
 // remove deletes the task under the cursor, keeping the cursor index and
 // clamping it to the last visible task.
 func (m Model) remove() Model {
-	visible := m.visible()
-	if m.cursor >= len(visible) {
+	i, ok := m.selected()
+	if !ok {
 		return m
 	}
 	m = m.push()
-	i := visible[m.cursor]
 	m.tasks = slices.Delete(m.tasks.Clone(), i, i+1)
 	return m.clampCursor().save().scroll()
 }

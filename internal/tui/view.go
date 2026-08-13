@@ -33,7 +33,7 @@ func (m Model) rows() (rows []string, cursorRow int) {
 	cursorRow = -1
 	visible := m.visible()
 	i := 0
-	for _, s := range []board.Status{board.Todo, board.Doing, board.Done} {
+	for _, s := range board.Statuses {
 		header := fmt.Sprintf("  %s (%d)", board.SectionName(s), m.count(s))
 		if s == board.Done && m.collapsed {
 			header += " ▸"
@@ -174,6 +174,9 @@ func (m Model) hintLines() []string {
 }
 
 func (m Model) hints() string {
+	if m.readErr != "" {
+		return "not saving — " + m.readErr
+	}
 	switch m.mode {
 	case insertMode:
 		return insertHints

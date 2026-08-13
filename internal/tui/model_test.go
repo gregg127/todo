@@ -1203,6 +1203,34 @@ func TestOwnWritesNeverTriggerAReload(t *testing.T) {
 	}
 }
 
+// A hand-edit can leave the file unreadable. The app must not save over it:
+// the next save would rewrite the file without the lines the parser dropped.
+func TestAHandEditTheParserCannotReadIsNeverSavedOver(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n")
+	m := open(t, dir)
+
+	broken := "## TODO\n- [ ] one\nnotes I typed straight into the file\n"
+	write(t, dir, broken)
+	m = poll(m)
+
+	m = send(m, "o", "two", "enter", "dd")
+	if got := file(t, dir); got != broken {
+		t.Fatalf("the app wrote over a file it could not read:\ngot  %q\nwant %q", got, broken)
+	}
+	if !strings.Contains(m.View(), "not saving") {
+		t.Fatalf("nothing on screen says saving is off:\n%s", m.View())
+	}
+
+	// Fixing the file by hand puts the board back in charge of it.
+	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n")
+	m = poll(m)
+	m = send(m, "G", "dd")
+	if got := file(t, dir); !strings.Contains(got, "- [ ] one") || strings.Contains(got, "two") {
+		t.Fatalf("saving did not resume after the file was fixed: %q", got)
+	}
+}
+
 func TestReloadKeepsTheCursorOnTheSameTask(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n- [ ] three\n")
