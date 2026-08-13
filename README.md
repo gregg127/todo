@@ -17,6 +17,5 @@ todo board.md   # any other board file
 todo --help     # the key bindings
 ```
 
-The board file is the whole data model: `internal/board` knows how to read and write it
-and nothing else, `internal/tui` drives it. A file the parser cannot read whole is
-refused at startup rather than silently rewritten.
+A file the parser cannot read whole is refused at startup rather than silently
+rewritten.
