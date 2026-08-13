@@ -16,6 +16,7 @@ const dbFile = "todo-database.md"
 const (
 	normalMode = iota
 	insertMode
+	filterMode
 )
 
 // Model is the whole application state; Update is the single reducer.
@@ -30,9 +31,11 @@ type Model struct {
 	// width and height come from tea.WindowSizeMsg; offset is the first
 	// board row on screen.
 	width, height, offset int
-	// mode is normalMode or insertMode; input is the text being typed.
-	mode  int
-	input string
+	// mode is normalMode, insertMode or filterMode; input is the text being
+	// typed in insert mode and filter is the live filter query.
+	mode   int
+	input  string
+	filter string
 	// editing is the index of the task being edited, or -1 when the input
 	// will create a new task at insertAt with status insertStatus.
 	editing      int
@@ -61,13 +64,7 @@ func (m Model) pop() Model {
 	}
 	m.tasks = m.undo[len(m.undo)-1]
 	m.undo = m.undo[:len(m.undo)-1]
-	if n := len(m.visible()); m.cursor > n-1 {
-		m.cursor = n - 1
-	}
-	if m.cursor < 0 {
-		m.cursor = 0
-	}
-	return m.save().scroll()
+	return m.clampCursor().save().scroll()
 }
 
 // save writes the board and records the resulting mtime.
@@ -155,15 +152,32 @@ func New(dir string) Model {
 // visible lists indexes into m.tasks in display order: TODO, then DOING, then
 // DONE, keeping the slice order within each section.
 func (m Model) visible() []int {
+	q := strings.ToLower(m.filter)
 	var out []int
 	for _, s := range []Status{Todo, Doing, Done} {
 		for i, t := range m.tasks {
-			if t.Status == s {
-				out = append(out, i)
+			if t.Status != s {
+				continue
 			}
+			if q != "" && !strings.Contains(strings.ToLower(t.Title), q) {
+				continue
+			}
+			out = append(out, i)
 		}
 	}
 	return out
+}
+
+// clampCursor keeps the cursor inside the visible list, which the filter can
+// narrow at any keystroke.
+func (m Model) clampCursor() Model {
+	if n := len(m.visible()); m.cursor > n-1 {
+		m.cursor = n - 1
+	}
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+	return m
 }
 
 func (m Model) Init() tea.Cmd { return nil }
@@ -229,13 +243,7 @@ func (m Model) remove() Model {
 	m = m.push()
 	i := visible[m.cursor]
 	m.tasks = append(m.tasks.clone()[:i], m.tasks[i+1:]...)
-	if m.cursor > len(m.tasks)-1 {
-		m.cursor = len(m.tasks) - 1
-	}
-	if m.cursor < 0 {
-		m.cursor = 0
-	}
-	return m.save().scroll()
+	return m.clampCursor().save().scroll()
 }
 
 // insertKey handles a key press while the one-line input is open.
@@ -262,9 +270,36 @@ func (m Model) insertKey(k string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// filterKey handles a key press while the filter is being typed. Only Enter
+// and Esc are commands; every printable key narrows the list further.
+func (m Model) filterKey(k string) (tea.Model, tea.Cmd) {
+	switch k {
+	case "enter":
+		m.mode = normalMode
+		return m.clampCursor().scroll(), nil
+	case "esc":
+		m.mode, m.filter = normalMode, ""
+		return m.clampCursor().scroll(), nil
+	case "backspace":
+		if r := []rune(m.filter); len(r) > 0 {
+			m.filter = string(r[:len(r)-1])
+		}
+	case " ", "space":
+		m.filter += " "
+	default:
+		if r := []rune(k); len(r) == 1 {
+			m.filter += k
+		}
+	}
+	return m.clampCursor().scroll(), nil
+}
+
 func (m Model) key(k string) (tea.Model, tea.Cmd) {
-	if m.mode == insertMode {
+	switch m.mode {
+	case insertMode:
 		return m.insertKey(k)
+	case filterMode:
+		return m.filterKey(k)
 	}
 
 	if m.pending != "" {
@@ -305,6 +340,12 @@ func (m Model) key(k string) (tea.Model, tea.Cmd) {
 		if n > 0 {
 			m.cursor = n - 1
 		}
+	case "/":
+		m.mode, m.filter, m.cursor = filterMode, "", 0
+		return m.scroll(), nil
+	case "esc":
+		m.filter = ""
+		return m.clampCursor().scroll(), nil
 	case "u":
 		return m.pop(), nil
 	case "J":

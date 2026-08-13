@@ -148,8 +148,11 @@ func (m Model) View() string {
 }
 
 func (m Model) hints() string {
-	if m.mode == insertMode {
+	switch m.mode {
+	case insertMode:
 		return insertHints
+	case filterMode:
+		return "/" + m.filter
 	}
 	return normalHints
 }

@@ -779,3 +779,113 @@ func TestUndoStackIsNeverWrittenToDisk(t *testing.T) {
 		t.Fatalf("undo left something on disk: %v", entries)
 	}
 }
+
+const filterBoard = "## TODO\n- [ ] Write docs\n- [ ] ship it\n\n## DOING\n- [ ] write tests\n\n## DONE\n- [x] design\n"
+
+func TestFilterNarrowsTheListAsYouType(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, filterBoard)
+
+	m := send(New(dir), "/", "wri")
+
+	v := m.View()
+	for _, want := range []string{"○ Write docs", "◐ write tests"} {
+		if !strings.Contains(v, want) {
+			t.Fatalf("filtered view missing %q:\n%s", want, v)
+		}
+	}
+	for _, unwanted := range []string{"ship it", "design"} {
+		if strings.Contains(v, unwanted) {
+			t.Fatalf("filtered view still shows %q:\n%s", unwanted, v)
+		}
+	}
+	if !strings.Contains(v, "TODO (1)") || !strings.Contains(v, "DOING (1)") || !strings.Contains(v, "DONE (0)") {
+		t.Fatalf("counts do not reflect the filtered view:\n%s", v)
+	}
+}
+
+func TestFilterHintBarShowsTheLiveQuery(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, filterBoard)
+
+	m := send(New(dir), "/", "wri")
+
+	lines := viewLines(m)
+	if got := lines[len(lines)-1]; !strings.Contains(got, "/wri") {
+		t.Fatalf("hint bar %q does not show the query", got)
+	}
+}
+
+func TestCursorMovesWithinTheFilteredListOnly(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, filterBoard)
+
+	m := send(New(dir), "/", "wri", "enter")
+
+	if got := cursorLine(t, m); got != "○ Write docs" {
+		t.Fatalf("cursor on %q, want the first match", got)
+	}
+	m = send(m, "j")
+	if got := cursorLine(t, m); got != "◐ write tests" {
+		t.Fatalf("j went to %q, want the second match", got)
+	}
+	m = send(m, "j")
+	if got := cursorLine(t, m); got != "◐ write tests" {
+		t.Fatalf("j left the filtered list, cursor on %q", got)
+	}
+}
+
+func TestActingOnAFilteredTaskAndTheFilterPersists(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, filterBoard)
+
+	m := send(New(dir), "/", "wri", "enter", "3")
+
+	want := "## TODO\n- [ ] ship it\n\n## DOING\n- [ ] write tests\n\n## DONE\n- [x] design\n- [x] Write docs\n"
+	if got := file(t, dir); got != want {
+		t.Fatalf("file = %q, want %q", got, want)
+	}
+	if strings.Contains(m.View(), "ship it") {
+		t.Fatalf("the filter was dropped after acting on a match:\n%s", m.View())
+	}
+
+	// dd and cc act on the filtered task under the cursor too.
+	m = send(m, "gg", "cc", "backspace", "backspace", "backspace", "backspace", "ing", "enter")
+	m = send(m, "dd")
+
+	if got := file(t, dir); strings.Contains(got, "write") {
+		t.Fatalf("cc/dd did not act on the filtered task: %q", got)
+	}
+}
+
+func TestEscClearsTheFilter(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, filterBoard)
+
+	m := send(New(dir), "/", "wri", "esc")
+
+	v := m.View()
+	for _, want := range []string{"ship it", "design", "Write docs", "write tests"} {
+		if !strings.Contains(v, want) {
+			t.Fatalf("esc did not restore the full board, %q missing:\n%s", want, v)
+		}
+	}
+	if !strings.Contains(v, "q quit") {
+		t.Fatalf("esc did not return to normal mode:\n%s", v)
+	}
+}
+
+func TestNAndNAreNotBound(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, filterBoard)
+	before := file(t, dir)
+
+	m := send(New(dir), "n", "N")
+
+	if got := file(t, dir); got != before {
+		t.Fatalf("n/N changed the file: %q", got)
+	}
+	if got := cursorLine(t, m); got != "○ Write docs" {
+		t.Fatalf("n/N moved the cursor to %q", got)
+	}
+}
