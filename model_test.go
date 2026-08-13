@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -253,5 +254,128 @@ func TestCursorMovementOnAnEmptyBoardIsHarmless(t *testing.T) {
 	}
 	if !strings.Contains(m.View(), "TODO (0)") {
 		t.Fatalf("empty board view broke:\n%s", m.View())
+	}
+}
+
+// resize sends a window size to the model.
+func resize(m Model, w, h int) Model {
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	return tm.(Model)
+}
+
+// longBoard is a TODO section with n tasks named task-0…task-(n-1).
+func longBoard(n int) string {
+	var b strings.Builder
+	b.WriteString("## TODO\n")
+	for i := 0; i < n; i++ {
+		fmt.Fprintf(&b, "- [ ] task-%d\n", i)
+	}
+	return b.String()
+}
+
+func viewLines(m Model) []string {
+	return strings.Split(strings.TrimRight(m.View(), "\n"), "\n")
+}
+
+func TestViewportFitsTheWindowAndKeepsTheCursorOnScreen(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, longBoard(40))
+	m := resize(New(dir), 60, 12)
+
+	for i := 0; i < 40; i++ {
+		if got := len(viewLines(m)); got > 12 {
+			t.Fatalf("view is %d rows, window is 12", got)
+		}
+		if cursorLine(t, m) == "" {
+			t.Fatalf("cursor scrolled off screen at task-%d:\n%s", i, m.View())
+		}
+		m = send(m, "j")
+	}
+}
+
+func TestScrolloffKeepsThreeRowsOfContext(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, longBoard(40))
+	m := resize(New(dir), 60, 14)
+	m = send(m, "G")
+	for i := 0; i < 20; i++ {
+		m = send(m, "k")
+	}
+
+	lines := viewLines(m)
+	cursor := -1
+	for i, l := range lines {
+		if strings.HasPrefix(l, "▸") {
+			cursor = i
+		}
+	}
+	if cursor < scrolloff {
+		t.Fatalf("only %d rows above the cursor:\n%s", cursor, m.View())
+	}
+	// The last line is the hint bar, so board rows below the cursor are
+	// len(lines)-1-cursor-1.
+	if below := len(lines) - 2 - cursor; below < scrolloff {
+		t.Fatalf("only %d rows below the cursor:\n%s", below, m.View())
+	}
+}
+
+func TestLongListScrollsAndNothingIsFolded(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, longBoard(40)+"\n## DONE\n- [x] finished\n")
+	m := resize(New(dir), 60, 12)
+	m = send(m, "G")
+
+	v := m.View()
+	if !strings.Contains(v, "● finished") {
+		t.Fatalf("the bottom of the board is not reachable:\n%s", v)
+	}
+	if strings.Contains(v, "task-0\n") {
+		t.Fatalf("the top of the board did not scroll away:\n%s", v)
+	}
+}
+
+func TestLongTitleIsTruncatedToOneRow(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] "+strings.Repeat("x", 200)+"\n")
+	m := resize(New(dir), 40, 20)
+
+	for _, line := range viewLines(m) {
+		if len([]rune(line)) > 40 {
+			t.Fatalf("row is %d cells wide, window is 40: %q", len([]rune(line)), line)
+		}
+	}
+	if !strings.Contains(m.View(), "…") {
+		t.Fatalf("truncated title has no ellipsis:\n%s", m.View())
+	}
+}
+
+func TestHintBarIsTheBottomRow(t *testing.T) {
+	m, _ := newBoard3(t)
+	lines := viewLines(m)
+
+	last := lines[len(lines)-1]
+	for _, want := range []string{"j/k", "q quit"} {
+		if !strings.Contains(last, want) {
+			t.Fatalf("hint bar %q missing %q", last, want)
+		}
+	}
+}
+
+func TestNoHexColorsInTheCodebase(t *testing.T) {
+	entries, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range entries {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		src, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i := strings.Index(string(src), `Color("#`); i >= 0 {
+			t.Fatalf("%s uses a hex color", f)
+		}
 	}
 }
