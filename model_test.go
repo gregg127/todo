@@ -113,7 +113,7 @@ func TestExistingFileIsLoadedOntoTheBoard(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "## TODO\n- [ ] write tests\n- [ ] ship it\n\n## DOING\n- [ ] refactor\n\n## DONE\n- [x] design\n")
 
-	v := New(dir).View()
+	v := send(New(dir), "C").View()
 
 	for _, want := range []string{"TODO (2)", "DOING (1)", "DONE (1)", "○ write tests", "○ ship it", "◐ refactor", "● design"} {
 		if !strings.Contains(v, want) {
@@ -159,11 +159,13 @@ func cursorLine(t *testing.T, m Model) string {
 // board3 is a board with tasks in all three sections.
 const board3 = "## TODO\n- [ ] one\n- [ ] two\n\n## DOING\n- [ ] three\n\n## DONE\n- [x] four\n"
 
+// newBoard3 expands DONE, which starts collapsed, so the cursor tests can walk
+// the whole board.
 func newBoard3(t *testing.T) (Model, string) {
 	t.Helper()
 	dir := t.TempDir()
 	write(t, dir, board3)
-	return New(dir), dir
+	return send(New(dir), "C"), dir
 }
 
 func TestCursorStartsOnTheFirstTask(t *testing.T) {
@@ -324,7 +326,7 @@ func TestLongListScrollsAndNothingIsFolded(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, longBoard(40)+"\n## DONE\n- [x] finished\n")
 	m := resize(New(dir), 60, 12)
-	m = send(m, "G")
+	m = send(m, "C", "G")
 
 	v := m.View()
 	if !strings.Contains(v, "● finished") {
@@ -384,7 +386,7 @@ func TestNoHexColorsInTheCodebase(t *testing.T) {
 func TestStatusChangeMovesTheTaskToTheBottomOfTheTargetSection(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n\n## DONE\n- [x] old\n")
-	m := send(New(dir), "3")
+	m := send(New(dir), "C", "3")
 
 	if got, want := file(t, dir), "## TODO\n- [ ] two\n\n## DOING\n\n## DONE\n- [x] old\n- [x] one\n"; got != want {
 		t.Fatalf("file = %q, want %q", got, want)
@@ -416,7 +418,7 @@ func TestEveryStatusChangeIsPersisted(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n")
 
-	m := send(New(dir), "2", "gg", "3")
+	m := send(New(dir), "C", "2", "gg", "3")
 
 	want := "## TODO\n\n## DOING\n- [ ] one\n\n## DONE\n- [x] two\n"
 	if got := file(t, dir); got != want {
@@ -733,6 +735,133 @@ func TestUndoOnAnEmptyStackChangesNothing(t *testing.T) {
 	}
 }
 
+func TestDoneStartsCollapsedAndCTogglesIt(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, board3)
+
+	m := New(dir)
+	v := m.View()
+	if strings.Contains(v, "● four") {
+		t.Fatalf("DONE did not start collapsed:\n%s", v)
+	}
+	// The count is still there, so nothing looks lost.
+	if !strings.Contains(v, "DONE (1)") {
+		t.Fatalf("collapsed DONE lost its count:\n%s", v)
+	}
+
+	m = send(m, "C")
+	if !strings.Contains(m.View(), "● four") {
+		t.Fatalf("C did not expand DONE:\n%s", m.View())
+	}
+	m = send(m, "C")
+	if strings.Contains(m.View(), "● four") {
+		t.Fatalf("C did not collapse DONE again:\n%s", m.View())
+	}
+}
+
+func TestCollapsedDoneIsOutOfReachOfTheCursor(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, board3)
+
+	// G is the last task on the board, which with DONE collapsed is the DOING
+	// one, and a status change into DONE folds the task away without stranding
+	// the cursor.
+	m := send(New(dir), "G")
+	if got := cursorLine(t, m); got != "◐ three" {
+		t.Fatalf("G went to %q, want the last unfolded task", got)
+	}
+
+	m = send(m, "3")
+	if got := cursorLine(t, m); got != "○ two" {
+		t.Fatalf("cursor on %q after folding a task away, want the last visible task", got)
+	}
+	if !strings.Contains(m.View(), "DONE (2)") {
+		t.Fatalf("the task did not land in DONE:\n%s", m.View())
+	}
+}
+
+func TestSectionJumpsLandOnTheFirstTaskOfTheNextSection(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n\n## DOING\n- [ ] three\n\n## DONE\n- [x] four\n")
+
+	m := send(New(dir), "C", "}")
+	if got := cursorLine(t, m); got != "◐ three" {
+		t.Fatalf("cursor on %q after }, want the first DOING task", got)
+	}
+	m = send(m, "}")
+	if got := cursorLine(t, m); got != "● four" {
+		t.Fatalf("cursor on %q after a second }, want the first DONE task", got)
+	}
+	m = send(m, "{", "{")
+	if got := cursorLine(t, m); got != "○ one" {
+		t.Fatalf("cursor on %q after two {, want the first TODO task", got)
+	}
+}
+
+func TestSectionJumpsSkipEmptySectionsAndStopAtTheEnds(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n\n## DOING\n\n## DONE\n- [x] two\n")
+
+	// DOING is empty, so } jumps straight past it, and again at the end of the
+	// board nothing moves.
+	m := send(New(dir), "C", "}", "}")
+	if got := cursorLine(t, m); got != "● two" {
+		t.Fatalf("cursor on %q, want the DONE task", got)
+	}
+	m = send(m, "{", "{")
+	if got := cursorLine(t, m); got != "○ one" {
+		t.Fatalf("cursor on %q, want the TODO task", got)
+	}
+}
+
+func TestRedoReplaysEveryUndo(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n\n## DOING\n\n## DONE\n")
+
+	m := send(New(dir), "C", "o", "two", "enter", "3")
+	want := file(t, dir)
+
+	m = send(m, "u", "u")
+	m = send(m, "r", "r")
+
+	if got := file(t, dir); got != want {
+		t.Fatalf("after two redos file = %q, want %q", got, want)
+	}
+	if !strings.Contains(m.View(), "● two") {
+		t.Fatalf("redo did not restore the board:\n%s", m.View())
+	}
+}
+
+func TestRedoOnAnEmptyStackChangesNothing(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n\n## DOING\n\n## DONE\n")
+
+	// Nothing undone yet, and a redo after a redo has caught up.
+	m := send(New(dir), "C", "r", "3", "u", "r", "r")
+
+	want := "## TODO\n\n## DOING\n\n## DONE\n- [x] one\n"
+	if got := file(t, dir); got != want {
+		t.Fatalf("after redo file = %q, want %q", got, want)
+	}
+	if !strings.Contains(m.View(), "● one") {
+		t.Fatalf("redo on an empty stack broke the view:\n%s", m.View())
+	}
+}
+
+func TestNewMutationDropsTheRedoStack(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n\n## DOING\n\n## DONE\n")
+
+	// Undo the status change, then fork the history with a new mutation: the
+	// undone change must no longer be reachable.
+	send(New(dir), "3", "u", "o", "two", "enter", "r")
+
+	want := "## TODO\n- [ ] one\n- [ ] two\n\n## DOING\n\n## DONE\n"
+	if got := file(t, dir); got != want {
+		t.Fatalf("after redo on a forked history file = %q, want %q", got, want)
+	}
+}
+
 func TestNoOpKeyPressPushesNoSnapshot(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "## TODO\n- [ ] one\n\n## DOING\n- [ ] two\n")
@@ -863,7 +992,7 @@ func TestEscClearsTheFilter(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, filterBoard)
 
-	m := send(New(dir), "/", "wri", "esc")
+	m := send(New(dir), "C", "/", "wri", "esc")
 
 	v := m.View()
 	for _, want := range []string{"ship it", "design", "Write docs", "write tests"} {

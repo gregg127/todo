@@ -23,7 +23,7 @@ var (
 
 const insertHints = "enter confirm · esc cancel"
 
-const normalHints = "j/k move · 1/2/3 status · J/K reorder · o/O add · cc edit · dd delete · u undo · / filter · q quit"
+const normalHints = "j/k or ↑/↓ move · {/} section · 1/2/3 change status · J/K reorder · o/O add · cc edit · dd delete · C toggle DONE · u undo · r redo · / filter · q quit"
 
 // rows renders every board row — section headers and task lines — and reports
 // which row the cursor is on (-1 when the board is empty).
@@ -32,13 +32,11 @@ func (m Model) rows() (rows []string, cursorRow int) {
 	visible := m.visible()
 	i := 0
 	for _, s := range []Status{Todo, Doing, Done} {
-		n := 0
-		for _, idx := range visible {
-			if m.tasks[idx].Status == s {
-				n++
-			}
+		header := fmt.Sprintf("  %s (%d)", sectionName(s), m.count(s))
+		if s == Done && m.collapsed {
+			header += " ▸"
 		}
-		rows = append(rows, headerStyle.Render(fmt.Sprintf("  %s (%d)", sectionName(s), n)))
+		rows = append(rows, headerStyle.Render(header))
 		for _, idx := range visible {
 			t := m.tasks[idx]
 			if t.Status != s {
@@ -90,8 +88,8 @@ func (m Model) listHeight(total int) int {
 	if m.height <= 0 {
 		return total
 	}
-	// The hint bar, and the input row when it is open, cost a row each.
-	h := m.height - 1
+	// The hint bar, and the input row when it is open, cost their rows.
+	h := m.height - len(m.hintLines())
 	if m.mode == insertMode {
 		h--
 	}
@@ -140,11 +138,47 @@ func (m Model) View() string {
 	if m.mode == insertMode {
 		body += "\n› " + m.input
 	}
-	hints := m.hints()
-	if m.width > 0 && len([]rune(hints)) > m.width {
-		hints = string([]rune(hints)[:m.width-1]) + "…"
+	var hints []string
+	for _, line := range m.hintLines() {
+		hints = append(hints, hintStyle.Render(line))
 	}
-	return body + "\n" + hintStyle.Render(hints)
+	return body + "\n" + strings.Join(hints, "\n")
+}
+
+// hintLines wraps the hint bar onto as many rows as it needs, breaking at the
+// " · " separators so no hint is split in half.
+func (m Model) hintLines() []string {
+	hints := m.hints()
+	if m.width <= 0 || len([]rune(hints)) <= m.width {
+		return []string{hints}
+	}
+	var lines []string
+	cur := ""
+	for _, seg := range strings.Split(hints, " · ") {
+		switch {
+		case cur == "":
+			cur = seg
+		case len([]rune(cur))+3+len([]rune(seg)) <= m.width:
+			cur += " · " + seg
+		default:
+			lines = append(lines, cur)
+			cur = seg
+		}
+	}
+	lines = append(lines, cur)
+	// A single hint wider than the pane — a long filter query, say — still has
+	// to be cut somewhere.
+	var out []string
+	for _, line := range lines {
+		for r := []rune(line); ; r = r[m.width:] {
+			if len(r) <= m.width {
+				out = append(out, string(r))
+				break
+			}
+			out = append(out, string(r[:m.width]))
+		}
+	}
+	return out
 }
 
 func (m Model) hints() string {
@@ -153,6 +187,9 @@ func (m Model) hints() string {
 		return insertHints
 	case filterMode:
 		return "/" + m.filter
+	}
+	if m.filter != "" {
+		return fmt.Sprintf("filter: %q · esc clear · %s", m.filter, normalHints)
 	}
 	return normalHints
 }

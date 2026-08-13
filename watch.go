@@ -42,7 +42,7 @@ func (m Model) reload() Model {
 		return m
 	}
 	m.tasks = tasks
-	m.undo = nil
+	m.undo, m.redo = nil, nil
 	m.saved, _ = mtime(m.path)
 
 	for row, i := range m.visible() {

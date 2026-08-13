@@ -36,34 +36,54 @@ type Model struct {
 	mode   int
 	input  string
 	filter string
+	// collapsed hides the contents of the DONE section. It starts on: finished
+	// work is context, not the working list.
+	collapsed bool
 	// editing is the index of the task being edited, or -1 when the input
 	// will create a new task at insertAt with status insertStatus.
 	editing      int
 	insertAt     int
 	insertStatus Status
-	// undo is a stack of task snapshots taken before each mutation. It is
-	// in-memory only and is never written to disk.
+	// undo is a stack of task snapshots taken before each mutation, redo the
+	// stack of states undone away from. Both are in-memory only and are never
+	// written to disk.
 	undo []Board
+	redo []Board
 	// saved is the mtime the app itself last wrote, so the watcher can tell
 	// its own writes from a hand-edit.
 	saved time.Time
 }
 
 // push snapshots the current tasks so the mutation about to happen can be
-// undone. No-op key presses must not call it.
+// undone. No-op key presses must not call it. A fresh mutation forks the
+// history, so whatever was undone away from is no longer reachable.
 func (m Model) push() Model {
 	m.undo = append(append([]Board{}, m.undo...), m.tasks.clone())
+	m.redo = nil
 	return m
 }
 
-// pop restores the last snapshot. On an empty stack nothing happens at all,
-// on screen or on disk.
+// pop restores the last snapshot, keeping the state it left behind for redo.
+// On an empty stack nothing happens at all, on screen or on disk.
 func (m Model) pop() Model {
 	if len(m.undo) == 0 {
 		return m
 	}
+	m.redo = append(append([]Board{}, m.redo...), m.tasks.clone())
 	m.tasks = m.undo[len(m.undo)-1]
 	m.undo = m.undo[:len(m.undo)-1]
+	return m.clampCursor().save().scroll()
+}
+
+// unpop replays the last undone state, keeping the state it left behind for
+// undo. On an empty stack nothing happens at all.
+func (m Model) unpop() Model {
+	if len(m.redo) == 0 {
+		return m
+	}
+	m.undo = append(append([]Board{}, m.undo...), m.tasks.clone())
+	m.tasks = m.redo[len(m.redo)-1]
+	m.redo = m.redo[:len(m.redo)-1]
 	return m.clampCursor().save().scroll()
 }
 
@@ -136,10 +156,11 @@ func (m Model) cursorTo(i int) Model {
 	for row, idx := range m.visible() {
 		if idx == i {
 			m.cursor = row
-			break
+			return m
 		}
 	}
-	return m
+	// The task is off the board — collapsed away, say. Keep the cursor legal.
+	return m.clampCursor()
 }
 
 // New builds a model rooted at dir, loading ./todo-database.md if it exists.
@@ -147,26 +168,71 @@ func New(dir string) Model {
 	path := filepath.Join(dir, dbFile)
 	tasks, _ := Load(path)
 	saved, _ := mtime(path)
-	return Model{path: path, tasks: tasks, saved: saved}
+	return Model{path: path, tasks: tasks, saved: saved, collapsed: true}
+}
+
+// matches reports whether t survives the current filter.
+func (m Model) matches(t Task) bool {
+	q := strings.ToLower(m.filter)
+	return q == "" || strings.Contains(strings.ToLower(t.Title), q)
+}
+
+// count is how many tasks a section holds under the current filter, whether or
+// not the section is collapsed.
+func (m Model) count(s Status) int {
+	n := 0
+	for _, t := range m.tasks {
+		if t.Status == s && m.matches(t) {
+			n++
+		}
+	}
+	return n
 }
 
 // visible lists indexes into m.tasks in display order: TODO, then DOING, then
-// DONE, keeping the slice order within each section.
+// DONE, keeping the slice order within each section. A collapsed DONE section
+// contributes nothing: its tasks are off the board and out of reach of the
+// cursor until it is expanded again.
 func (m Model) visible() []int {
-	q := strings.ToLower(m.filter)
 	var out []int
 	for _, s := range []Status{Todo, Doing, Done} {
+		if s == Done && m.collapsed {
+			continue
+		}
 		for i, t := range m.tasks {
-			if t.Status != s {
-				continue
-			}
-			if q != "" && !strings.Contains(strings.ToLower(t.Title), q) {
+			if t.Status != s || !m.matches(t) {
 				continue
 			}
 			out = append(out, i)
 		}
 	}
 	return out
+}
+
+// jumpSection puts the cursor on the first task of the nearest section delta
+// steps away that has any visible tasks, skipping empty ones. At the end of
+// the board nothing moves.
+func (m Model) jumpSection(delta int) Model {
+	visible := m.visible()
+	if m.cursor >= len(visible) {
+		return m
+	}
+	sections := []Status{Todo, Doing, Done}
+	at := 0
+	for i, s := range sections {
+		if s == m.tasks[visible[m.cursor]].Status {
+			at = i
+		}
+	}
+	for at += delta; at >= 0 && at < len(sections); at += delta {
+		for row, i := range visible {
+			if m.tasks[i].Status == sections[at] {
+				m.cursor = row
+				return m.scroll()
+			}
+		}
+	}
+	return m
 }
 
 // clampCursor keeps the cursor inside the visible list, which the filter can
@@ -336,14 +402,21 @@ func (m Model) key(k string) (tea.Model, tea.Cmd) {
 		return m.newTask(1), nil
 	case "O":
 		return m.newTask(0), nil
-	case "j":
+	case "j", "down":
 		if m.cursor < n-1 {
 			m.cursor++
 		}
-	case "k":
+	case "k", "up":
 		if m.cursor > 0 {
 			m.cursor--
 		}
+	case "C":
+		m.collapsed = !m.collapsed
+		return m.clampCursor().scroll(), nil
+	case "{":
+		return m.jumpSection(-1), nil
+	case "}":
+		return m.jumpSection(1), nil
 	case "G":
 		if n > 0 {
 			m.cursor = n - 1
@@ -356,6 +429,8 @@ func (m Model) key(k string) (tea.Model, tea.Cmd) {
 		return m.clampCursor().scroll(), nil
 	case "u":
 		return m.pop(), nil
+	case "r":
+		return m.unpop(), nil
 	case "J":
 		return m.move(1), nil
 	case "K":
