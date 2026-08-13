@@ -47,7 +47,6 @@ func (m Model) rows() (rows []string, cursorRow int) {
 				gutter = "▸ "
 				cursorRow = len(rows)
 			}
-			line := gutter + statusDot(s) + " " + m.truncate(t.Title)
 			style := todoStyle
 			switch s {
 			case Doing:
@@ -58,28 +57,40 @@ func (m Model) rows() (rows []string, cursorRow int) {
 			if i == m.cursor {
 				style = cursorStyle
 			}
-			rows = append(rows, style.Render(line))
+			for j, part := range m.fold(t.Title) {
+				// Continuation rows line up under the first one's text.
+				prefix := "    "
+				if j == 0 {
+					prefix = gutter + statusDot(s) + " "
+				}
+				rows = append(rows, style.Render(prefix+part))
+			}
 			i++
 		}
 	}
 	return rows, cursorRow
 }
 
-// truncate keeps every task on exactly one row.
-func (m Model) truncate(title string) string {
-	if m.width <= 0 {
-		return title
+// fold breaks a title onto as many rows as it needs, so a long task is read in
+// full instead of being cut off. The width left for text is the pane minus the
+// gutter (2) and the dot and its space (2).
+func (m Model) fold(title string) []string {
+	if m.width <= 4 {
+		return []string{title}
 	}
-	// gutter (2) + dot and space (2)
-	max := m.width - 4
-	if max < 1 {
-		max = 1
+	return wrap(title, m.width-4)
+}
+
+// wrap breaks s onto rows at most width runes wide, at spaces where it can and
+// mid-word where a single word is wider than the pane. Width pads every row out
+// to the full width; the padding is trimmed, or it would show as a block under
+// the cursor's reverse video.
+func wrap(s string, width int) []string {
+	lines := strings.Split(lipgloss.NewStyle().Width(width).Render(s), "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimRight(line, " ")
 	}
-	r := []rune(title)
-	if len(r) <= max {
-		return title
-	}
-	return string(r[:max-1]) + "…"
+	return lines
 }
 
 // listHeight is the number of rows available to the board, the pane minus the
@@ -153,7 +164,7 @@ func (m Model) inputLines() []string {
 	if m.width <= 0 {
 		return []string{line}
 	}
-	return strings.Split(lipgloss.NewStyle().Width(m.width).Render(line), "\n")
+	return wrap(line, m.width)
 }
 
 // hintLines wraps the hint bar onto as many rows as it needs, breaking at the

@@ -337,18 +337,38 @@ func TestLongListScrollsAndNothingIsFolded(t *testing.T) {
 	}
 }
 
-func TestLongTitleIsTruncatedToOneRow(t *testing.T) {
+func TestLongTitleFoldsOntoTheBoard(t *testing.T) {
 	dir := t.TempDir()
-	write(t, dir, "## TODO\n- [ ] "+strings.Repeat("x", 200)+"\n")
+	title := strings.TrimSpace(strings.Repeat("alpha bravo charlie ", 5))
+	write(t, dir, "## TODO\n- [ ] "+title+"\n")
 	m := resize(New(dir), 40, 20)
 
-	for _, line := range viewLines(m) {
+	lines := viewLines(m)
+	for _, line := range lines {
 		if len([]rune(line)) > 40 {
 			t.Fatalf("row is %d cells wide, window is 40: %q", len([]rune(line)), line)
 		}
 	}
-	if !strings.Contains(m.View(), "…") {
-		t.Fatalf("truncated title has no ellipsis:\n%s", m.View())
+	if got := strings.Join(strings.Fields(strings.Join(lines, " ")), " "); !strings.Contains(got, title) {
+		t.Fatalf("title was cut, not folded:\n%s", m.View())
+	}
+}
+
+func TestAWordWiderThanThePaneIsBrokenNotDropped(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] "+strings.Repeat("x", 200)+"\n")
+	m := resize(New(dir), 40, 20)
+
+	lines := viewLines(m)
+	n := 0
+	for _, line := range lines {
+		if len([]rune(line)) > 40 {
+			t.Fatalf("row is %d cells wide, window is 40: %q", len([]rune(line)), line)
+		}
+		n += strings.Count(line, "x")
+	}
+	if n != 200 {
+		t.Fatalf("%d of 200 x's on screen:\n%s", n, m.View())
 	}
 }
 
