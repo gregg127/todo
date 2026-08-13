@@ -88,11 +88,8 @@ func (m Model) listHeight(total int) int {
 	if m.height <= 0 {
 		return total
 	}
-	// The hint bar, and the input row when it is open, cost their rows.
-	h := m.height - len(m.hintLines())
-	if m.mode == insertMode {
-		h--
-	}
+	// The hint bar, and the input when it is open, cost their rows.
+	h := m.height - len(m.hintLines()) - len(m.inputLines())
 	if h < 1 {
 		h = 1
 	}
@@ -135,14 +132,28 @@ func (m Model) View() string {
 		start = len(rows)
 	}
 	body := strings.Join(rows[start:end], "\n")
-	if m.mode == insertMode {
-		body += "\n› " + m.input
+	for _, line := range m.inputLines() {
+		body += "\n" + line
 	}
 	var hints []string
 	for _, line := range m.hintLines() {
 		hints = append(hints, hintStyle.Render(line))
 	}
 	return body + "\n" + strings.Join(hints, "\n")
+}
+
+// inputLines is the open one-line input, folded onto as many rows as the text
+// needs: a task title being typed is never cut off, the board gives up the
+// rows instead. It is empty unless the input is open.
+func (m Model) inputLines() []string {
+	if m.mode != insertMode {
+		return nil
+	}
+	line := "› " + m.input
+	if m.width <= 0 {
+		return []string{line}
+	}
+	return strings.Split(lipgloss.NewStyle().Width(m.width).Render(line), "\n")
 }
 
 // hintLines wraps the hint bar onto as many rows as it needs, breaking at the

@@ -352,6 +352,30 @@ func TestLongTitleIsTruncatedToOneRow(t *testing.T) {
 	}
 }
 
+func TestLongInputFoldsOntoTheWindowAndStaysWhole(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, longBoard(40))
+	m := resize(New(dir), 30, 12)
+
+	text := strings.TrimSpace(strings.Repeat("alpha bravo charlie ", 6))
+	m = send(m, "o", text)
+
+	lines := viewLines(m)
+	if got := len(lines); got > 12 {
+		t.Fatalf("view is %d rows, window is 12:\n%s", got, m.View())
+	}
+	for _, line := range lines {
+		if len([]rune(line)) > 30 {
+			t.Fatalf("row is %d cells wide, window is 30: %q", len([]rune(line)), line)
+		}
+	}
+	// Every word typed is still on screen, folded across rows rather than cut.
+	onScreen := strings.Join(strings.Fields(strings.Join(lines, " ")), " ")
+	if !strings.Contains(onScreen, text) {
+		t.Fatalf("input was cut, not folded:\n%s", m.View())
+	}
+}
+
 func TestHintBarIsTheBottomRow(t *testing.T) {
 	m, _ := newBoard3(t)
 	lines := viewLines(m)
