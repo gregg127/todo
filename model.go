@@ -57,6 +57,26 @@ func (m Model) setStatus(s Status) Model {
 	return m.save().scroll()
 }
 
+// move swaps the task under the cursor with its neighbour delta rows away,
+// but only when that neighbour is in the same section: reordering must never
+// change a task's status.
+func (m Model) move(delta int) Model {
+	visible := m.visible()
+	to := m.cursor + delta
+	if m.cursor >= len(visible) || to < 0 || to >= len(visible) {
+		return m
+	}
+	i, j := visible[m.cursor], visible[to]
+	if m.tasks[i].Status != m.tasks[j].Status {
+		return m
+	}
+	tasks := m.tasks.clone()
+	tasks[i], tasks[j] = tasks[j], tasks[i]
+	m.tasks = tasks
+	m.cursor = to
+	return m.save().scroll()
+}
+
 // cursorTo puts the cursor on the task at index i in the task slice.
 func (m Model) cursorTo(i int) Model {
 	for row, idx := range m.visible() {
@@ -132,6 +152,10 @@ func (m Model) key(k string) (tea.Model, tea.Cmd) {
 		if n > 0 {
 			m.cursor = n - 1
 		}
+	case "J":
+		return m.move(1), nil
+	case "K":
+		return m.move(-1), nil
 	case "1":
 		return m.setStatus(Todo), nil
 	case "2":

@@ -472,3 +472,53 @@ func TestTheAppRecordsTheMtimeOfItsOwnSave(t *testing.T) {
 		t.Fatalf("recorded mtime %v, file mtime %v", m.saved, fi.ModTime())
 	}
 }
+
+func TestJAndKReorderWithinASection(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n- [ ] three\n")
+	m := New(dir)
+
+	m = send(m, "J")
+	if got, want := file(t, dir), "## TODO\n- [ ] two\n- [ ] one\n- [ ] three\n\n## DOING\n\n## DONE\n"; got != want {
+		t.Fatalf("after J file = %q, want %q", got, want)
+	}
+	if got := cursorLine(t, m); got != "○ one" {
+		t.Fatalf("cursor left the moved task, it is on %q", got)
+	}
+
+	m = send(m, "K")
+	if got, want := file(t, dir), "## TODO\n- [ ] one\n- [ ] two\n- [ ] three\n\n## DOING\n\n## DONE\n"; got != want {
+		t.Fatalf("after K file = %q, want %q", got, want)
+	}
+	if got := cursorLine(t, m); got != "○ one" {
+		t.Fatalf("cursor left the moved task, it is on %q", got)
+	}
+}
+
+func TestReorderingStopsAtSectionBoundaries(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n\n## DOING\n- [ ] two\n\n## DONE\n- [x] three\n")
+	before := file(t, dir)
+
+	// J on the only (and therefore last) TODO task, K on the first DOING task.
+	m := send(New(dir), "J")
+	if got := file(t, dir); got != before {
+		t.Fatalf("J across a section boundary changed the file: %q", got)
+	}
+	m = send(m, "j", "K", "J")
+	if got := file(t, dir); got != before {
+		t.Fatalf("J/K across a section boundary changed the file: %q", got)
+	}
+	if !strings.Contains(m.View(), "◐ two") {
+		t.Fatalf("reordering changed a status:\n%s", m.View())
+	}
+}
+
+func TestReorderingOnAnEmptyBoardIsHarmless(t *testing.T) {
+	dir := t.TempDir()
+	send(New(dir), "J", "K")
+
+	if got := file(t, dir); got != "" {
+		t.Fatalf("reordering an empty board wrote %q", got)
+	}
+}
