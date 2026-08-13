@@ -8,6 +8,7 @@ hand-edit. Vim-style keys, three sections — TODO, DOING, DONE.
 ```
 make build      # ./todo
 make install    # /usr/local/bin/todo
+make run        # a throwaway copy of the example board
 make test
 ```
 
