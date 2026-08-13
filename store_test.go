@@ -79,6 +79,9 @@ func TestExampleFileIsWrittenInTheAppsOwnFormat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := Validate(string(want)); err != nil {
+		t.Fatalf("the app would refuse to open its own example: %v", err)
+	}
 	if got := Render(Parse(string(want))); got != string(want) {
 		t.Fatalf("example file is not what Render writes:\ngot  %q\nwant %q", got, want)
 	}
