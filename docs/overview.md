@@ -27,7 +27,8 @@ save. Order within a section is the order of the lines.
 Because a save rewrites the file from the parsed board, anything the parser
 does not understand would be dropped. Rather than eat your notes, the app
 refuses to open a file it cannot read whole and names the first bad line, and
-stops saving if a later hand-edit makes it unreadable. A
+stops saving if a later hand-edit makes it unreadable. A control character in a
+title counts as unreadable — a title goes to the terminal as it is. A
 missing file is not an error — it is created empty. Saves are atomic (temp file,
 fsync, rename) and the app tracks the mtime of its own last write, so it can
 tell your hand-edit from its own and reload only for yours.
