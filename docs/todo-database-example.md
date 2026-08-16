@@ -1,4 +1,5 @@
 ## TODO
+
 - [ ] read the plan for the week
 - [ ] draft the release notes
 - [ ] a task can be as long as you like — the board folds it onto as many rows as it needs instead of cutting it off
@@ -10,12 +11,14 @@
 - [ ] book the dentist
 
 ## DOING
+
 - [ ] rewrite the import step
 - [ ] chase the flaky test on CI
 - [ ] work out why the nightly backup takes four hours
 - [ ] read the Bubble Tea source for how it batches key messages
 
 ## DONE
+
 - [x] set up the repo
 - [x] pick a name
 - [x] decide the file format: three headings, one task per line

@@ -518,7 +518,7 @@ func TestStatusChangeMovesTheTaskToTheTopOfTheTargetSection(t *testing.T) {
 	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n\n## DONE\n- [x] old\n")
 	m := send(open(t, dir), "C", "3")
 
-	if got, want := file(t, dir), "## TODO\n- [ ] two\n\n## DOING\n\n## DONE\n- [x] one\n- [x] old\n"; got != want {
+	if got, want := file(t, dir), "## TODO\n\n- [ ] two\n\n## DOING\n\n## DONE\n\n- [x] one\n- [x] old\n"; got != want {
 		t.Fatalf("file = %q, want %q", got, want)
 	}
 	if !strings.Contains(m.View(), "TODO (1)") || !strings.Contains(m.View(), "DONE (2)") {
@@ -535,7 +535,7 @@ func TestStatusChangeToTheCurrentSectionHoistsTheTaskToTheTop(t *testing.T) {
 
 	m := send(open(t, dir), "jj", "1")
 
-	if got, want := file(t, dir), "## TODO\n- [ ] three\n- [ ] one\n- [ ] two\n\n## DOING\n\n## DONE\n"; got != want {
+	if got, want := file(t, dir), "## TODO\n\n- [ ] three\n- [ ] one\n- [ ] two\n\n## DOING\n\n## DONE\n"; got != want {
 		t.Fatalf("file = %q, want %q", got, want)
 	}
 	if got := cursorLine(t, m); got != "○ three" {
@@ -564,7 +564,7 @@ func TestEveryStatusChangeIsPersisted(t *testing.T) {
 
 	m := send(open(t, dir), "C", "2", "gg", "3")
 
-	want := "## TODO\n\n## DOING\n- [ ] one\n\n## DONE\n- [x] two\n"
+	want := "## TODO\n\n## DOING\n\n- [ ] one\n\n## DONE\n\n- [x] two\n"
 	if got := file(t, dir); got != want {
 		t.Fatalf("file = %q, want %q", got, want)
 	}
@@ -585,7 +585,7 @@ func TestFirstMutationCreatesTheFile(t *testing.T) {
 
 	send(m, "3")
 
-	if got, want := file(t, dir), "## TODO\n\n## DOING\n\n## DONE\n- [x] one\n"; got != want {
+	if got, want := file(t, dir), "## TODO\n\n## DOING\n\n## DONE\n\n- [x] one\n"; got != want {
 		t.Fatalf("the first mutation did not create the file: %q", got)
 	}
 }
@@ -626,7 +626,7 @@ func TestJAndKReorderWithinASection(t *testing.T) {
 	m := open(t, dir)
 
 	m = send(m, "J")
-	if got, want := file(t, dir), "## TODO\n- [ ] two\n- [ ] one\n- [ ] three\n\n## DOING\n\n## DONE\n"; got != want {
+	if got, want := file(t, dir), "## TODO\n\n- [ ] two\n- [ ] one\n- [ ] three\n\n## DOING\n\n## DONE\n"; got != want {
 		t.Fatalf("after J file = %q, want %q", got, want)
 	}
 	if got := cursorLine(t, m); got != "○ one" {
@@ -634,7 +634,7 @@ func TestJAndKReorderWithinASection(t *testing.T) {
 	}
 
 	m = send(m, "K")
-	if got, want := file(t, dir), "## TODO\n- [ ] one\n- [ ] two\n- [ ] three\n\n## DOING\n\n## DONE\n"; got != want {
+	if got, want := file(t, dir), "## TODO\n\n- [ ] one\n- [ ] two\n- [ ] three\n\n## DOING\n\n## DONE\n"; got != want {
 		t.Fatalf("after K file = %q, want %q", got, want)
 	}
 	if got := cursorLine(t, m); got != "○ one" {
@@ -676,7 +676,7 @@ func TestOAddsATaskBelowTheCursorInTheCursorsSection(t *testing.T) {
 
 	m := send(open(t, dir), "o", "new", "enter")
 
-	if got, want := file(t, dir), "## TODO\n- [ ] one\n- [ ] new\n- [ ] two\n\n## DOING\n- [ ] running\n\n## DONE\n"; got != want {
+	if got, want := file(t, dir), "## TODO\n\n- [ ] one\n- [ ] new\n- [ ] two\n\n## DOING\n\n- [ ] running\n\n## DONE\n"; got != want {
 		t.Fatalf("file = %q, want %q", got, want)
 	}
 	if got := cursorLine(t, m); got != "○ new" {
@@ -690,7 +690,7 @@ func TestOAddsATaskAboveTheCursor(t *testing.T) {
 
 	send(open(t, dir), "j", "O", "new", "enter")
 
-	if got, want := file(t, dir), "## TODO\n- [ ] one\n- [ ] new\n- [ ] two\n\n## DOING\n\n## DONE\n"; got != want {
+	if got, want := file(t, dir), "## TODO\n\n- [ ] one\n- [ ] new\n- [ ] two\n\n## DOING\n\n## DONE\n"; got != want {
 		t.Fatalf("file = %q, want %q", got, want)
 	}
 }
@@ -701,7 +701,7 @@ func TestOInDoingStartsATaskThere(t *testing.T) {
 
 	send(open(t, dir), "j", "o", "another", "enter")
 
-	if got, want := file(t, dir), "## TODO\n- [ ] one\n\n## DOING\n- [ ] running\n- [ ] another\n\n## DONE\n"; got != want {
+	if got, want := file(t, dir), "## TODO\n\n- [ ] one\n\n## DOING\n\n- [ ] running\n- [ ] another\n\n## DONE\n"; got != want {
 		t.Fatalf("file = %q, want %q", got, want)
 	}
 }
@@ -711,7 +711,7 @@ func TestOOnAnEmptyBoardCreatesTheFirstTodoTask(t *testing.T) {
 		dir := t.TempDir()
 		send(open(t, dir), key, "first", "enter")
 
-		if got, want := file(t, dir), "## TODO\n- [ ] first\n\n## DOING\n\n## DONE\n"; got != want {
+		if got, want := file(t, dir), "## TODO\n\n- [ ] first\n\n## DOING\n\n## DONE\n"; got != want {
 			t.Fatalf("%s on an empty board wrote %q, want %q", key, got, want)
 		}
 	}
@@ -755,7 +755,7 @@ func TestCCEditsTheCurrentTaskPrefilled(t *testing.T) {
 
 	m = send(m, "backspace", "backspace", "backspace", "backspace", "fixed", "enter")
 
-	if got, want := file(t, dir), "## TODO\n- [ ] fixed\n\n## DOING\n\n## DONE\n"; got != want {
+	if got, want := file(t, dir), "## TODO\n\n- [ ] fixed\n\n## DOING\n\n## DONE\n"; got != want {
 		t.Fatalf("file = %q, want %q", got, want)
 	}
 }
@@ -766,7 +766,7 @@ func TestDDDeletesImmediatelyAndKeepsTheRow(t *testing.T) {
 
 	m := send(open(t, dir), "j", "dd")
 
-	if got, want := file(t, dir), "## TODO\n- [ ] one\n- [ ] three\n\n## DOING\n\n## DONE\n"; got != want {
+	if got, want := file(t, dir), "## TODO\n\n- [ ] one\n- [ ] three\n\n## DOING\n\n## DONE\n"; got != want {
 		t.Fatalf("file = %q, want %q", got, want)
 	}
 	if got := cursorLine(t, m); got != "○ three" {
@@ -797,7 +797,7 @@ func TestNormalModeKeysAreLiteralTextInTheInput(t *testing.T) {
 
 	send(open(t, dir), "o", "quit the job 1 2 3 dd", "enter")
 
-	if got, want := file(t, dir), "## TODO\n- [ ] quit the job 1 2 3 dd\n\n## DOING\n\n## DONE\n"; got != want {
+	if got, want := file(t, dir), "## TODO\n\n- [ ] quit the job 1 2 3 dd\n\n## DOING\n\n## DONE\n"; got != want {
 		t.Fatalf("file = %q, want %q", got, want)
 	}
 }
@@ -819,7 +819,7 @@ func TestHintBarShowsInsertHintsWhileTheInputIsOpen(t *testing.T) {
 }
 
 func TestUndoReversesEveryMutation(t *testing.T) {
-	start := "## TODO\n- [ ] one\n- [ ] two\n\n## DOING\n\n## DONE\n"
+	start := "## TODO\n\n- [ ] one\n- [ ] two\n\n## DOING\n\n## DONE\n"
 	cases := []struct {
 		name string
 		keys []string
@@ -856,7 +856,7 @@ func TestUndoReversesEveryMutation(t *testing.T) {
 
 func TestRepeatedUndoWalksBack(t *testing.T) {
 	dir := t.TempDir()
-	start := "## TODO\n- [ ] one\n\n## DOING\n\n## DONE\n"
+	start := "## TODO\n\n- [ ] one\n\n## DOING\n\n## DONE\n"
 	write(t, dir, start)
 
 	m := send(open(t, dir), "o", "two", "enter", "o", "three", "enter", "3")
@@ -983,7 +983,7 @@ func TestRedoOnAnEmptyStackChangesNothing(t *testing.T) {
 	// Nothing undone yet, and a redo after a redo has caught up.
 	m := send(open(t, dir), "C", "r", "3", "u", "r", "r")
 
-	want := "## TODO\n\n## DOING\n\n## DONE\n- [x] one\n"
+	want := "## TODO\n\n## DOING\n\n## DONE\n\n- [x] one\n"
 	if got := file(t, dir); got != want {
 		t.Fatalf("after redo file = %q, want %q", got, want)
 	}
@@ -1000,7 +1000,7 @@ func TestNewMutationDropsTheRedoStack(t *testing.T) {
 	// undone change must no longer be reachable.
 	send(open(t, dir), "3", "u", "o", "two", "enter", "r")
 
-	want := "## TODO\n- [ ] one\n- [ ] two\n\n## DOING\n\n## DONE\n"
+	want := "## TODO\n\n- [ ] one\n- [ ] two\n\n## DOING\n\n## DONE\n"
 	if got := file(t, dir); got != want {
 		t.Fatalf("after redo on a forked history file = %q, want %q", got, want)
 	}
@@ -1018,7 +1018,7 @@ func TestNoOpKeyPressPushesNoSnapshot(t *testing.T) {
 	m = send(m, "gg", "2", "K", "J", "o", "esc")
 	m = send(m, "u")
 
-	want := "## TODO\n- [ ] one\n\n## DOING\n- [ ] two\n\n## DONE\n"
+	want := "## TODO\n\n- [ ] one\n\n## DOING\n\n- [ ] two\n\n## DONE\n"
 	if got := file(t, dir); got != want {
 		t.Fatalf("after undo file = %q, want %q", got, want)
 	}
@@ -1115,7 +1115,7 @@ func TestActingOnAFilteredTaskAndTheFilterPersists(t *testing.T) {
 
 	m := send(open(t, dir), "/", "wri", "enter", "3")
 
-	want := "## TODO\n- [ ] ship it\n\n## DOING\n- [ ] write tests\n\n## DONE\n- [x] Write docs\n- [x] design\n"
+	want := "## TODO\n\n- [ ] ship it\n\n## DOING\n\n- [ ] write tests\n\n## DONE\n\n- [x] Write docs\n- [x] design\n"
 	if got := file(t, dir); got != want {
 		t.Fatalf("file = %q, want %q", got, want)
 	}
@@ -1303,7 +1303,7 @@ func TestHandTickedBoxReloadsAsTodoAndIsNormalizedOnTheNextSave(t *testing.T) {
 
 	m = send(m, "G", "3")
 
-	want := "## TODO\n- [ ] one\n\n## DOING\n\n## DONE\n- [x] two\n"
+	want := "## TODO\n\n- [ ] one\n\n## DOING\n\n## DONE\n\n- [x] two\n"
 	if got := file(t, dir); got != want {
 		t.Fatalf("the next save did not normalize the file: %q, want %q", got, want)
 	}

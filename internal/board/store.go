@@ -80,7 +80,8 @@ func parseItem(line string) (string, bool) {
 }
 
 // Render serializes a board back to Markdown: all three headings in order,
-// one blank line between sections, trailing newline at end of file.
+// one blank line between a heading and its list and one between sections,
+// trailing newline at end of file. An empty section is its heading alone.
 func Render(b Board) string {
 	var sb strings.Builder
 	for i, s := range Statuses {
@@ -92,10 +93,16 @@ func Render(b Board) string {
 		if s == Done {
 			box = "- [x] "
 		}
+		first := true
 		for _, t := range b {
-			if t.Status == s {
-				sb.WriteString(box + t.Title + "\n")
+			if t.Status != s {
+				continue
 			}
+			if first {
+				sb.WriteString("\n")
+				first = false
+			}
+			sb.WriteString(box + t.Title + "\n")
 		}
 	}
 	return sb.String()

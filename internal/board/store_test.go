@@ -31,37 +31,37 @@ func TestParseAndRender(t *testing.T) {
 		{
 			name:  "ticked box under TODO stays a TODO task",
 			input: "## TODO\n- [x] hand ticked\n",
-			want:  "## TODO\n- [ ] hand ticked\n\n## DOING\n\n## DONE\n",
+			want:  "## TODO\n\n- [ ] hand ticked\n\n## DOING\n\n## DONE\n",
 		},
 		{
 			name:  "prose between sections is dropped",
 			input: "notes\n\n## TODO\nsome prose\n- [ ] a\n\n### other\n\n## DONE\n- [x] b\n",
-			want:  "## TODO\n- [ ] a\n\n## DOING\n\n## DONE\n- [x] b\n",
+			want:  "## TODO\n\n- [ ] a\n\n## DOING\n\n## DONE\n\n- [x] b\n",
 		},
 		{
 			name:  "items before any heading are dropped",
 			input: "- [ ] orphan\n## TODO\n- [ ] a\n",
-			want:  "## TODO\n- [ ] a\n\n## DOING\n\n## DONE\n",
+			want:  "## TODO\n\n- [ ] a\n\n## DOING\n\n## DONE\n",
 		},
 		{
 			name:  "truncated file",
 			input: "## TODO\n- [ ] a\n- [ ",
-			want:  "## TODO\n- [ ] a\n\n## DOING\n\n## DONE\n",
+			want:  "## TODO\n\n- [ ] a\n\n## DOING\n\n## DONE\n",
 		},
 		{
 			name:  "CRLF line endings",
 			input: "## TODO\r\n- [ ] a\r\n\r\n## DOING\r\n- [ ] b\r\n",
-			want:  "## TODO\n- [ ] a\n\n## DOING\n- [ ] b\n\n## DONE\n",
+			want:  "## TODO\n\n- [ ] a\n\n## DOING\n\n- [ ] b\n\n## DONE\n",
 		},
 		{
 			name:  "title containing a checkbox",
 			input: "## TODO\n- [ ] write - [ ] in a title\n",
-			want:  "## TODO\n- [ ] write - [ ] in a title\n\n## DOING\n\n## DONE\n",
+			want:  "## TODO\n\n- [ ] write - [ ] in a title\n\n## DOING\n\n## DONE\n",
 		},
 		{
 			name:  "all three sections in order",
 			input: "## DONE\n- [x] c\n\n## TODO\n- [ ] a\n\n## DOING\n- [ ] b\n",
-			want:  "## TODO\n- [ ] a\n\n## DOING\n- [ ] b\n\n## DONE\n- [x] c\n",
+			want:  "## TODO\n\n- [ ] a\n\n## DOING\n\n- [ ] b\n\n## DONE\n\n- [x] c\n",
 		},
 	}
 
