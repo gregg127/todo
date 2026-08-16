@@ -18,5 +18,8 @@ todo board.md   # any other board file
 todo --help     # the key bindings
 ```
 
+`make install` puts `todo` on your PATH. It opens the board in whatever
+directory you run it from, so each project keeps its own.
+
 A file the parser cannot read whole is refused at startup rather than silently
 rewritten.
