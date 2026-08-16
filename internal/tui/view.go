@@ -143,7 +143,7 @@ func (m Model) scroll() Model {
 func (m Model) click(y int) Model {
 	rows, at := m.rows()
 	row := m.offset + y
-	if y < 0 || y >= m.listHeight(len(rows)) || row >= len(at) || at[row] < 0 {
+	if y >= m.listHeight(len(rows)) || row >= len(at) || at[row] < 0 {
 		return m
 	}
 	m.cursor = at[row]
