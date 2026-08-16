@@ -1308,3 +1308,43 @@ func TestHandTickedBoxReloadsAsTodoAndIsNormalizedOnTheNextSave(t *testing.T) {
 		t.Fatalf("the next save did not normalize the file: %q, want %q", got, want)
 	}
 }
+
+// paste feeds a terminal paste — the whole clipboard in one key event.
+func paste(m Model, text string) Model {
+	tm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(text), Paste: true})
+	return tm.(Model)
+}
+
+func TestPasteLandsInTheInputAndIsSaved(t *testing.T) {
+	dir := t.TempDir()
+
+	m := send(open(t, dir), "o", "call ")
+	m = paste(m, "Ada Lovelace")
+	m = send(m, " back", "enter")
+
+	if got, want := file(t, dir), "## TODO\n\n- [ ] call Ada Lovelace back\n\n## DOING\n\n## DONE\n"; got != want {
+		t.Fatalf("file = %q, want %q", got, want)
+	}
+}
+
+func TestMultiLinePasteBecomesOneTitle(t *testing.T) {
+	dir := t.TempDir()
+
+	m := send(open(t, dir), "o")
+	m = send(paste(m, "one\ntwo\n"), "enter")
+
+	if got, want := file(t, dir), "## TODO\n\n- [ ] one two\n\n## DOING\n\n## DONE\n"; got != want {
+		t.Fatalf("file = %q, want %q", got, want)
+	}
+}
+
+func TestPasteInNormalModeChangesNothing(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n")
+
+	m := paste(open(t, dir), "junk")
+
+	if m.input != "" || m.filter != "" || m.mode != normalMode {
+		t.Fatalf("paste outside the input left input=%q filter=%q mode=%d", m.input, m.filter, m.mode)
+	}
+}

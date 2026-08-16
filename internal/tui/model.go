@@ -296,6 +296,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		return m.scroll(), nil
 	case tea.KeyMsg:
+		// A terminal paste (⌘V, ctrl+shift+V) arrives as one key event holding
+		// the whole clipboard, not as key presses, so it never reaches typed().
+		if msg.Paste {
+			return m.pasted(string(msg.Runes)), nil
+		}
 		return m.key(msg.String())
 	}
 	return m, nil
@@ -360,6 +365,20 @@ func (m Model) insertKey(k string) (tea.Model, tea.Cmd) {
 	// Every other printable key is text, so a task can be called "quit the job".
 	m.input = typed(m.input, k)
 	return m, nil
+}
+
+// pasted appends clipboard text to the line being typed. A task title is one
+// line, so a multi-line paste is flattened to spaces instead of being refused.
+// Outside the input and the filter there is no line to paste into.
+func (m Model) pasted(text string) Model {
+	text = strings.Join(strings.Fields(text), " ")
+	switch m.mode {
+	case insertMode:
+		m.input += text
+	case filterMode:
+		m.filter += text
+	}
+	return m.clampCursor().scroll()
 }
 
 // typed applies a key press to a line being typed: backspace deletes the last
