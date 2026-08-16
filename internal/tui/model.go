@@ -112,14 +112,16 @@ func (m Model) selected() (int, bool) {
 }
 
 // setStatus moves the task under the cursor to s, landing it at the top of
-// the target section, and keeps the cursor on it. Moving a task to the section
-// it is already in changes nothing at all.
+// the target section, and keeps the cursor on it. Pressing the key for the
+// section the task is already in hoists it to the top of that section, so the
+// same key both moves a task across and to the front. A task already at the
+// top of its own section has nowhere to go.
 func (m Model) setStatus(s board.Status) Model {
 	i, ok := m.selected()
 	if !ok {
 		return m
 	}
-	if m.tasks[i].Status == s {
+	if m.tasks[i].Status == s && m.firstIn(s) == i {
 		return m
 	}
 
@@ -130,6 +132,18 @@ func (m Model) setStatus(s board.Status) Model {
 	m.tasks = append(board.Board{t}, slices.Delete(m.tasks.Clone(), i, i+1)...)
 	m = m.cursorTo(0)
 	return m.save().scroll()
+}
+
+// firstIn is the index of the first task of section s, -1 when the section is
+// empty. It ignores the filter: a hidden task still holds the top of its
+// section.
+func (m Model) firstIn(s board.Status) int {
+	for i, t := range m.tasks {
+		if t.Status == s {
+			return i
+		}
+	}
+	return -1
 }
 
 // move swaps the task under the cursor with its neighbour delta rows away,

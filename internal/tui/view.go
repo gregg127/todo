@@ -25,7 +25,7 @@ var (
 
 const insertHints = "enter confirm · esc cancel"
 
-const normalHints = "j/k or ↑/↓ move · {/} section · 1/2/3 change status · J/K reorder · o/O add · cc edit · dd delete · C toggle DONE · u undo · r redo · / filter · q quit"
+const normalHints = "j/k or ↑/↓ move · {/} section · 1/2/3 status or top · J/K reorder · o/O add · cc edit · dd delete · C toggle DONE · u undo · r redo · / filter · q quit"
 
 // rows renders every board row — section headers and task lines — and reports
 // which row the cursor is on (-1 when the board is empty).

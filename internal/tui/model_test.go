@@ -529,7 +529,21 @@ func TestStatusChangeMovesTheTaskToTheTopOfTheTargetSection(t *testing.T) {
 	}
 }
 
-func TestStatusChangeToTheCurrentSectionIsANoOp(t *testing.T) {
+func TestStatusChangeToTheCurrentSectionHoistsTheTaskToTheTop(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n- [ ] three\n")
+
+	m := send(open(t, dir), "jj", "1")
+
+	if got, want := file(t, dir), "## TODO\n- [ ] three\n- [ ] one\n- [ ] two\n\n## DOING\n\n## DONE\n"; got != want {
+		t.Fatalf("file = %q, want %q", got, want)
+	}
+	if got := cursorLine(t, m); got != "○ three" {
+		t.Fatalf("cursor did not follow the hoisted task, it is on %q", got)
+	}
+}
+
+func TestStatusChangeOnATaskAlreadyAtTheTopIsANoOp(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n")
 	before := file(t, dir)
