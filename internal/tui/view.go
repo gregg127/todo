@@ -28,9 +28,9 @@ const insertHints = "enter confirm · esc cancel"
 const normalHints = "j/k or ↑/↓ move · {/} section · 1/2/3 status or top · J/K reorder · o/O add · cc edit · dd delete · C toggle DONE · u undo · r redo · / filter · q quit"
 
 // rows renders every board row — section headers and task lines — and reports
-// which row the cursor is on (-1 when the board is empty).
-func (m Model) rows() (rows []string, cursorRow int) {
-	cursorRow = -1
+// which visible task each row belongs to: an index into the visible list, or
+// -1 for a section header. A folded title owns every row it spans.
+func (m Model) rows() (rows []string, at []int) {
 	visible := m.visible()
 	i := 0
 	for _, s := range board.Statuses {
@@ -38,7 +38,7 @@ func (m Model) rows() (rows []string, cursorRow int) {
 		if s == board.Done && m.collapsed {
 			header += " ▸"
 		}
-		rows = append(rows, headerStyle.Render(header))
+		rows, at = append(rows, headerStyle.Render(header)), append(at, -1)
 		for _, idx := range visible {
 			t := m.tasks[idx]
 			if t.Status != s {
@@ -47,7 +47,6 @@ func (m Model) rows() (rows []string, cursorRow int) {
 			gutter := "  "
 			if i == m.cursor {
 				gutter = "▸ "
-				cursorRow = len(rows)
 			}
 			style := todoStyle
 			switch s {
@@ -65,12 +64,23 @@ func (m Model) rows() (rows []string, cursorRow int) {
 				if j == 0 {
 					prefix = gutter + statusDot(s) + " "
 				}
-				rows = append(rows, style.Render(prefix+part))
+				rows, at = append(rows, style.Render(prefix+part)), append(at, i)
 			}
 			i++
 		}
 	}
-	return rows, cursorRow
+	return rows, at
+}
+
+// cursorRow is the first row of the task under the cursor, -1 when the cursor
+// is on no task — an empty board, or everything filtered away.
+func cursorRow(at []int, cursor int) int {
+	for row, i := range at {
+		if i == cursor {
+			return row
+		}
+	}
+	return -1
 }
 
 // fold breaks a title onto as many rows as it needs, so a long task is read in
@@ -113,8 +123,9 @@ func (m Model) listHeight(total int) int {
 // scroll moves the viewport the minimum distance needed to keep the cursor on
 // screen with scrolloff rows of context where the list allows it.
 func (m Model) scroll() Model {
-	rows, cursorRow := m.rows()
+	rows, at := m.rows()
 	h := m.listHeight(len(rows))
+	cursorRow := cursorRow(at, m.cursor)
 	if cursorRow < 0 || len(rows) <= h {
 		m.offset = 0
 		return m
@@ -132,6 +143,19 @@ func (m Model) scroll() Model {
 		m.offset = 0
 	}
 	return m
+}
+
+// click puts the cursor on the task at screen row y. A click on a section
+// header, on a blank row, or anywhere below the board selects nothing: the
+// cursor stays where it is.
+func (m Model) click(y int) Model {
+	rows, at := m.rows()
+	row := m.offset + y
+	if y < 0 || y >= m.listHeight(len(rows)) || row >= len(at) || at[row] < 0 {
+		return m
+	}
+	m.cursor = at[row]
+	return m.scroll()
 }
 
 func (m Model) View() string {

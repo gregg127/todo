@@ -17,6 +17,7 @@ unless another one is named. The file is created if it is not there yet;
 a file the board cannot read is reported and nothing starts.
 
   j / k        move the cursor down / up (also ↓ / ↑)
+  click        put the cursor on a task
   gg / G       jump to the first / last task
   { / }        jump to the previous / next section
   1 / 2 / 3    move the task to TODO / DOING / DONE
@@ -50,7 +51,7 @@ func main() {
 	if err != nil {
 		die(err)
 	}
-	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
+	if _, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run(); err != nil {
 		die(err)
 	}
 }

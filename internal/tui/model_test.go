@@ -1348,3 +1348,101 @@ func TestPasteInNormalModeChangesNothing(t *testing.T) {
 		t.Fatalf("paste outside the input left input=%q filter=%q mode=%d", m.input, m.filter, m.mode)
 	}
 }
+
+// click sends a left mouse press on screen row y.
+func click(m Model, y int) Model {
+	tm, _ := m.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, X: 4, Y: y})
+	return tm.(Model)
+}
+
+func TestClickingATaskSelectsIt(t *testing.T) {
+	m, _ := newBoard3(t)
+
+	// Rows: TODO, one, two, DOING, three, DONE, four.
+	for y, want := range map[int]string{2: "○ two", 4: "◐ three", 6: "● four", 1: "○ one"} {
+		if got := cursorLine(t, click(m, y)); got != want {
+			t.Fatalf("click on row %d selected %q, want %q", y, got, want)
+		}
+	}
+}
+
+func TestClickingASectionHeaderOrEmptySpaceSelectsNothing(t *testing.T) {
+	m, _ := newBoard3(t)
+	m = send(m, "j")
+
+	for _, y := range []int{0, 3, 5, 7, 20} {
+		if got := cursorLine(t, click(m, y)); got != "○ two" {
+			t.Fatalf("click on row %d moved the cursor to %q", y, got)
+		}
+	}
+}
+
+func TestClickingAFoldedTitleSelectsThatTask(t *testing.T) {
+	dir := t.TempDir()
+	long := strings.Repeat("word ", 10)
+	write(t, dir, "## TODO\n- [ ] one\n- [ ] "+strings.TrimSpace(long)+"\n- [ ] three\n")
+	m := resize(open(t, dir), 20, 24)
+
+	// Rows: TODO, one, then the folded task over several rows.
+	if got := cursorLine(t, click(m, 3)); !strings.Contains(got, "word") {
+		t.Fatalf("click on a continuation row selected %q", got)
+	}
+}
+
+func TestClickingUsesTheScrolledViewport(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, longBoard(40))
+	m := resize(open(t, dir), 60, 12)
+	m = send(m, "G")
+
+	want := strings.TrimSpace(strings.TrimPrefix(viewLines(m)[1], "▸"))
+	if got := cursorLine(t, click(m, 1)); got != want {
+		t.Fatalf("click on the second visible row selected %q, want %q", got, want)
+	}
+}
+
+func TestAClickChangesNothingButTheCursor(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, board3)
+	before := file(t, dir)
+
+	m := send(open(t, dir), "C")
+	m = click(m, 6)
+
+	if got := file(t, dir); got != before {
+		t.Fatalf("a click rewrote the file:\n%s", got)
+	}
+	if len(m.undo) != 0 {
+		t.Fatalf("a click pushed %d undo snapshots", len(m.undo))
+	}
+}
+
+func TestOnlyALeftPressSelects(t *testing.T) {
+	m, _ := newBoard3(t)
+
+	for _, msg := range []tea.MouseMsg{
+		{Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft, Y: 2},
+		{Action: tea.MouseActionMotion, Button: tea.MouseButtonLeft, Y: 2},
+		{Action: tea.MouseActionPress, Button: tea.MouseButtonRight, Y: 2},
+		{Action: tea.MouseActionPress, Button: tea.MouseButtonWheelDown, Y: 2},
+	} {
+		tm, _ := m.Update(msg)
+		if got := cursorLine(t, tm.(Model)); got != "○ one" {
+			t.Fatalf("%v moved the cursor to %q", msg, got)
+		}
+	}
+}
+
+func TestAClickWhileTheInputIsOpenChangesNothing(t *testing.T) {
+	m, _ := newBoard3(t)
+
+	m = send(m, "o", "new")
+	m = click(m, 6)
+
+	if m.cursor != 0 {
+		t.Fatalf("a click during insert moved the cursor to %d", m.cursor)
+	}
+	if m.input != "new" {
+		t.Fatalf("a click during insert left input %q", m.input)
+	}
+}

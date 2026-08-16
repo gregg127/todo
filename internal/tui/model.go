@@ -295,6 +295,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		return m.scroll(), nil
+	case tea.MouseMsg:
+		// Only a left press selects; the input is a text field, and moving the
+		// cursor out from under it mid-edit would be a surprise.
+		if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft || m.mode == insertMode {
+			return m, nil
+		}
+		return m.click(msg.Y), nil
 	case tea.KeyMsg:
 		// A terminal paste (⌘V, ctrl+shift+V) arrives as one key event holding
 		// the whole clipboard, not as key presses, so it never reaches typed().
