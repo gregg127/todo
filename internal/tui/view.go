@@ -101,8 +101,9 @@ func (m Model) listHeight(total int) int {
 	if m.height <= 0 {
 		return total
 	}
-	// The hint bar, and the input when it is open, cost their rows.
-	h := m.height - len(m.hintLines()) - len(m.inputLines())
+	// The hint bar, its blank spacer, and the input when it is open, cost
+	// their rows.
+	h := m.height - len(m.hintLines()) - len(m.inputLines()) - 1
 	if h < 1 {
 		h = 1
 	}
@@ -148,7 +149,8 @@ func (m Model) View() string {
 	for _, line := range m.hintLines() {
 		hints = append(hints, hintStyle.Render(line))
 	}
-	return body + "\n" + strings.Join(hints, "\n")
+	// A blank row sets the hint bar off from the board.
+	return body + "\n\n" + strings.Join(hints, "\n")
 }
 
 // inputLines is the open one-line input, folded onto as many rows as the text
