@@ -23,3 +23,8 @@ directory you run it from, so each project keeps its own.
 
 A file the parser cannot read whole is refused at startup rather than silently
 rewritten.
+
+`go.sum` pins a SHA-256 hash of every dependency's file tree, and `make build`
+runs `go mod verify` to check the module cache against it. Treat `go.sum` diffs
+as security-relevant: a changed hash for a version that did not change means the
+bytes moved under you.
