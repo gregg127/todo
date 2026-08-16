@@ -121,7 +121,10 @@ func (m Model) setStatus(s board.Status) Model {
 	if !ok {
 		return m
 	}
-	if m.tasks[i].Status == s && m.firstIn(s) == i {
+	// The first task of the section, filter ignored: a hidden task still holds
+	// the top of its section.
+	first := slices.IndexFunc(m.tasks, func(t board.Task) bool { return t.Status == s })
+	if m.tasks[i].Status == s && first == i {
 		return m
 	}
 
@@ -132,18 +135,6 @@ func (m Model) setStatus(s board.Status) Model {
 	m.tasks = append(board.Board{t}, slices.Delete(m.tasks.Clone(), i, i+1)...)
 	m = m.cursorTo(0)
 	return m.save().scroll()
-}
-
-// firstIn is the index of the first task of section s, -1 when the section is
-// empty. It ignores the filter: a hidden task still holds the top of its
-// section.
-func (m Model) firstIn(s board.Status) int {
-	for i, t := range m.tasks {
-		if t.Status == s {
-			return i
-		}
-	}
-	return -1
 }
 
 // move swaps the task under the cursor with its neighbour delta rows away,
