@@ -3,6 +3,12 @@
 A security review of `todo-cli` as it stands at commit `6421c38`, covering the
 application source and all 19 modules in the dependency graph.
 
+> **Status: findings 1–3 fixed, recommendations 1–4 applied.** See `e0fd71d`
+> (control characters), `aebd1dc` (the click guard) and `9b058c4` (the
+> dependency floor). `govulncheck` now reports nothing at any level. Still open:
+> recommendation 5 (Bubble Tea v2 migration) and 6 (CI). The findings below are
+> left as written, as the record of what was wrong.
+
 **Method.** The whole source tree (~800 lines excluding tests) was read by hand.
 Dependencies were audited by five parallel sub-reviews, one per library group,
 against the Go vulnerability database, OSV, and GitHub advisories. Findings were
