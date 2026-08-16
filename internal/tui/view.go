@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -72,17 +73,6 @@ func (m Model) rows() (rows []string, at []int) {
 	return rows, at
 }
 
-// cursorRow is the first row of the task under the cursor, -1 when the cursor
-// is on no task — an empty board, or everything filtered away.
-func cursorRow(at []int, cursor int) int {
-	for row, i := range at {
-		if i == cursor {
-			return row
-		}
-	}
-	return -1
-}
-
 // fold breaks a title onto as many rows as it needs, so a long task is read in
 // full instead of being cut off. The width left for text is the pane minus the
 // gutter (2) and the dot and its space (2).
@@ -125,7 +115,9 @@ func (m Model) listHeight(total int) int {
 func (m Model) scroll() Model {
 	rows, at := m.rows()
 	h := m.listHeight(len(rows))
-	cursorRow := cursorRow(at, m.cursor)
+	// The cursor's first row, -1 when it is on no task — an empty board, or
+	// everything filtered away.
+	cursorRow := slices.Index(at, m.cursor)
 	if cursorRow < 0 || len(rows) <= h {
 		m.offset = 0
 		return m
