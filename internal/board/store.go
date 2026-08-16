@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // DefaultFile is the per-directory data file.
@@ -51,8 +52,19 @@ func Validate(text string) error {
 			inSection = true
 			continue
 		}
-		if _, ok := parseItem(line); !ok || !inSection {
+		title, ok := parseItem(line)
+		if !ok || !inSection {
 			return fmt.Errorf("line %d: %q is not a task or a section heading", i+1, line)
+		}
+		// A title is one line of display text and goes to the terminal as it is,
+		// so a control character in it is either a mistake or an attempt to write
+		// escape sequences to the screen of whoever opens the board. Refuse the
+		// file rather than strip them, for the same reason the parser refuses
+		// anything else it cannot represent: the next save would rewrite it.
+		for _, r := range title {
+			if unicode.IsControl(r) {
+				return fmt.Errorf("line %d: control character %q in task title", i+1, r)
+			}
 		}
 	}
 	return nil

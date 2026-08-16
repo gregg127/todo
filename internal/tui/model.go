@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -370,6 +371,15 @@ func (m Model) insertKey(k string) (tea.Model, tea.Cmd) {
 // Outside the input and the filter there is no line to paste into.
 func (m Model) pasted(text string) Model {
 	text = strings.Join(strings.Fields(text), " ")
+	// Fields deals with the whitespace controls; drop the rest, or a paste could
+	// smuggle escape sequences into a title and from there into the file. Strip
+	// rather than refuse: there is nothing on disk yet to damage.
+	text = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, text)
 	switch m.mode {
 	case insertMode:
 		m.input += text

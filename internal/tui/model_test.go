@@ -1338,6 +1338,17 @@ func TestMultiLinePasteBecomesOneTitle(t *testing.T) {
 	}
 }
 
+func TestPasteDropsEscapeSequences(t *testing.T) {
+	dir := t.TempDir()
+
+	m := send(open(t, dir), "o")
+	m = send(paste(m, "buy milk\x1b]52;c;aGVsbG8=\x07"), "enter")
+
+	if got, want := file(t, dir), "## TODO\n\n- [ ] buy milk]52;c;aGVsbG8=\n\n## DOING\n\n## DONE\n"; got != want {
+		t.Fatalf("file = %q, want %q", got, want)
+	}
+}
+
 func TestPasteInNormalModeChangesNothing(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "## TODO\n- [ ] one\n")
@@ -1370,7 +1381,8 @@ func TestClickingASectionHeaderOrEmptySpaceSelectsNothing(t *testing.T) {
 	m, _ := newBoard3(t)
 	m = send(m, "j")
 
-	for _, y := range []int{0, 3, 5, 7, 20} {
+	// -1 is the row-0 mouse report Bubble Tea normalises past zero.
+	for _, y := range []int{-1, 0, 3, 5, 7, 20} {
 		if got := cursorLine(t, click(m, y)); got != "○ two" {
 			t.Fatalf("click on row %d moved the cursor to %q", y, got)
 		}

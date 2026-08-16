@@ -100,6 +100,7 @@ func TestValidateAcceptsWhatTheParserKeepsAndRejectsWhatItDrops(t *testing.T) {
 		board3,
 		"## DONE\r\n- [X] windows line endings and an uppercase box\r\n",
 		"## DOING\n- [ ] a\n   \n## TODO\n- [ ] b\n",
+		"## TODO\n- [ ] punctuation, dashes — and emoji 🎉 are all just text\n",
 	}
 	for _, text := range valid {
 		if err := Validate(text); err != nil {
@@ -114,6 +115,12 @@ func TestValidateAcceptsWhatTheParserKeepsAndRejectsWhatItDrops(t *testing.T) {
 		"- [ ] an item before any heading\n",
 		"## TODO\n- [ ] a\nprose after a task\n",
 		"## TODO\n  - [ ] an indented item\n",
+		// Escape sequences in a title reach the terminal as they are, so the
+		// file is refused rather than opened.
+		"## TODO\n- [ ] buy milk\x1b]52;c;aGVsbG8=\x07\n", // OSC 52 clipboard write
+		"## TODO\n- [ ] buy milk\x1b]0;pwned\x07\n",       // OSC 0 window title
+		"## TODO\n- [ ] buy milk\x07\n",                   // bare BEL, which ansi.Strip keeps
+		"## TODO\n- [ ] buy\rmilk\n",                      // bare CR, ditto
 	}
 	for _, text := range invalid {
 		if err := Validate(text); err == nil {
