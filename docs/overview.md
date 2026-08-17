@@ -28,10 +28,11 @@ Because a save rewrites the file from the parsed board, anything the parser
 does not understand would be dropped. Rather than eat your notes, the app
 refuses to open a file it cannot read whole and names the first bad line, and
 stops saving if a later hand-edit makes it unreadable. A control character in a
-title counts as unreadable — a title goes to the terminal as it is. A missing
-file is not an error — it is created empty. Saves are atomic (temp file, fsync,
-rename) and the app tracks the mtime of its own last write, so it can tell your
-hand-edit from its own and reload only for yours.
+title counts as unreadable — a title goes to the terminal as it is — though a
+paste is stripped of them rather than refused, since nothing is on disk to
+damage yet. A missing file is not an error — it is created empty. Saves are
+atomic (temp file, fsync, rename) and the app tracks the mtime of its own last
+write, so it can tell your hand-edit from its own and reload only for yours.
 
 ## The code
 
@@ -41,7 +42,8 @@ hand-edit from its own and reload only for yours.
 - `internal/tui` — a single `Model` and one reducer. Every key is a pure
   `Model → Model` step, which is what makes the behaviour testable without a
   terminal. `watch.go` is the single half-second tick, which both polls the
-  file's mtime and flips the input caret's blink.
+  file's mtime and flips the input caret's blink. `view.go` owns everything
+  screen-shaped: wrapping, scrolling, and the row-to-task map a click reads.
 
 Two things about the model are worth knowing before changing it: the cursor
 indexes the *visible* list, not the task slice, so a filter or a collapsed DONE

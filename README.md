@@ -5,12 +5,22 @@ Vibe coded for my personal use.
 An interactive task board in the terminal, stored as a Markdown file you can also
 hand-edit. Vim-style keys, three sections — TODO, DOING, DONE.
 
+## Install
+
+Needs Go 1.25+ and `make`.
+
 ```
-make build      # ./todo
-make install    # /usr/local/bin/todo
-make run        # a throwaway copy of the example board
-make test
+make build           # ./todo
+sudo make install    # /usr/local/bin/todo
+
+PREFIX=~/.local/bin make install    # no sudo, if it is on your PATH
 ```
+
+Build and install are separate because `sudo make build` runs go as root: no go
+on sudo's `PATH`, and root-owned files if there is. `sudo make uninstall`
+removes it again.
+
+## Usage
 
 ```
 todo            # ./todo-database.md, created if missing
@@ -18,13 +28,20 @@ todo board.md   # any other board file
 todo --help     # the key bindings
 ```
 
-`make install` puts `todo` on your PATH. It opens the board in whatever
-directory you run it from, so each project keeps its own.
+`todo` opens the board in whatever directory you run it from, so each project
+keeps its own.
 
 A file the parser cannot read whole is refused at startup rather than silently
 rewritten.
 
-`go.sum` pins a SHA-256 hash of every dependency's file tree, and `make build`
-runs `go mod verify` to check the module cache against it. Treat `go.sum` diffs
-as security-relevant: a changed hash for a version that did not change means the
-bytes moved under you.
+## Development
+
+```
+make run     # a throwaway copy of the example board
+make test
+```
+
+## Docs
+
+- [overview.md](docs/overview.md) — the design and the file format
+- [security-review.md](docs/security-review.md) — `go.sum` and dependency notes
