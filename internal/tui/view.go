@@ -178,11 +178,24 @@ func (m Model) inputLines() []string {
 	if m.mode != insertMode {
 		return nil
 	}
-	line := "› " + m.input
-	if m.width <= 0 {
-		return []string{line}
+	lines := []string{"› " + m.input}
+	if m.width > 0 {
+		// A column is held back for the caret, so it never spills onto a row
+		// the layout has not counted.
+		lines = wrap(lines[0], m.width-1)
 	}
-	return wrap(line, m.width)
+	lines[len(lines)-1] += m.caret()
+	return lines
+}
+
+// caret is the block cursor at the end of the input, up on one tick and down on
+// the next so it blinks where the next rune will land. Down it is a plain space:
+// the line is the same width either way, so the text never shifts.
+func (m Model) caret() string {
+	if !m.blink {
+		return " "
+	}
+	return cursorStyle.Render(" ")
 }
 
 // hintLines wraps the hint bar onto as many rows as it needs.

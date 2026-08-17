@@ -8,13 +8,15 @@ import (
 	"todo/internal/board"
 )
 
-// pollInterval is how often the app checks the file's mtime for a hand-edit.
-const pollInterval = time.Second
+// tickInterval is the app's only timer: how often it checks the file's mtime
+// for a hand-edit, and how long each phase of the input caret's blink lasts.
+// One loop drives both, so the caret can never end up out of step with itself.
+const tickInterval = 500 * time.Millisecond
 
 type tickMsg time.Time
 
 func tick() tea.Cmd {
-	return tea.Tick(pollInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
+	return tea.Tick(tickInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
 // changedOnDisk reports whether the file's mtime differs from the one the app

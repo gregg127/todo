@@ -482,6 +482,45 @@ func TestLongInputFoldsOntoTheWindowAndStaysWhole(t *testing.T) {
 	}
 }
 
+func TestTheInputCaretOpensUpAndBlinksOnEveryTick(t *testing.T) {
+	m, _ := newBoard3(t)
+
+	for _, keys := range [][]string{{"o", "task"}, {"cc"}} {
+		m := send(m, keys...)
+		if !m.blink {
+			t.Fatalf("%v opened the input with the caret down", keys)
+		}
+		if m = poll(m); m.blink {
+			t.Fatalf("%v: the caret did not go down on a tick", keys)
+		}
+		if m = poll(m); !m.blink {
+			t.Fatalf("%v: the caret did not come back up on the next tick", keys)
+		}
+	}
+}
+
+func TestTheCaretNeverWidensTheInputRowOrTheView(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, longBoard(40))
+	m := resize(open(t, dir), 20, 12)
+	m = send(m, "o")
+
+	// One rune at a time, unbroken so it folds mid-word: every length in turn
+	// fills the row, and the caret has to fit on it.
+	for i := 0; i < 30; i++ {
+		m = send(m, "x")
+		lines := viewLines(m)
+		if got := len(lines); got > 12 {
+			t.Fatalf("view is %d rows with %d runes typed, window is 12:\n%s", got, i+1, m.View())
+		}
+		for _, line := range lines {
+			if len([]rune(line)) > 20 {
+				t.Fatalf("row is %d cells wide with %d runes typed, window is 20: %q", len([]rune(line)), i+1, line)
+			}
+		}
+	}
+}
+
 func TestHintBarIsTheBottomRow(t *testing.T) {
 	m, _ := newBoard3(t)
 	lines := viewLines(m)
@@ -1170,9 +1209,9 @@ func poll(m Model) Model {
 	return tm.(Model)
 }
 
-func TestTickerFiresAboutOncePerSecond(t *testing.T) {
-	if pollInterval < 500*time.Millisecond || pollInterval > 2*time.Second {
-		t.Fatalf("poll interval is %v, want about a second", pollInterval)
+func TestTickerFiresAboutTwiceASecond(t *testing.T) {
+	if tickInterval < 200*time.Millisecond || tickInterval > time.Second {
+		t.Fatalf("tick interval is %v, want about half a second", tickInterval)
 	}
 	if open(t, t.TempDir()).Init() == nil {
 		t.Fatal("the model starts no ticker")

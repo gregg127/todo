@@ -40,7 +40,8 @@ tell your hand-edit from its own and reload only for yours.
   No terminal, no state; this is where the tests are cheapest.
 - `internal/tui` — a single `Model` and one reducer. Every key is a pure
   `Model → Model` step, which is what makes the behaviour testable without a
-  terminal. `watch.go` is the once-a-second mtime poll.
+  terminal. `watch.go` is the single half-second tick, which both polls the
+  file's mtime and flips the input caret's blink.
 
 Two things about the model are worth knowing before changing it: the cursor
 indexes the *visible* list, not the task slice, so a filter or a collapsed DONE

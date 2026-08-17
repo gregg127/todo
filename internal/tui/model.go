@@ -37,6 +37,10 @@ type Model struct {
 	mode   int
 	input  string
 	filter string
+	// blink is the caret's phase: on for one tick, off for the next. The
+	// terminal's own cursor sits wherever the last rendered row ends, so the
+	// input draws its own.
+	blink bool
 	// collapsed hides the contents of the DONE section. It starts on: finished
 	// work is context, not the working list.
 	collapsed bool
@@ -278,6 +282,7 @@ func (m Model) Init() tea.Cmd { return tick() }
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tickMsg:
+		m.blink = !m.blink
 		// The app's own writes update m.saved, so only somebody else's
 		// write reloads the board.
 		if m.changedOnDisk() {
@@ -309,6 +314,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) insert(at int, s board.Status) Model {
 	m.mode, m.input, m.editing = insertMode, "", -1
 	m.insertAt, m.insertStatus = at, s
+	// The input opens with the caret up, not half a tick of nothing.
+	m.blink = true
 	return m
 }
 
@@ -320,6 +327,7 @@ func (m Model) edit() Model {
 	}
 	m.mode, m.editing = insertMode, i
 	m.input = m.tasks[m.editing].Title
+	m.blink = true
 	return m
 }
 
