@@ -52,7 +52,7 @@ longer exists.
 ## Deliberately missing
 
 Priorities, due dates, recurring tasks, sub-tasks, tags, multiple boards at
-once, colour configuration, sync. The mouse does one thing — a left click puts
-the cursor on the task you clicked — and no more: no drag to reorder, no click
-to tick off. Styling uses ANSI colours 1–15 only, so the terminal's own
+once, colour configuration, sync. The mouse does two things — a left click puts
+the cursor on the task you clicked, the wheel scrolls the board without moving
+the cursor — and no more: no drag to reorder, no click to tick off. Styling uses ANSI colours 1–15 only, so the terminal's own
 colourscheme restyles the app for free.

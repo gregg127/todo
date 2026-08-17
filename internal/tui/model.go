@@ -293,12 +293,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		return m.scroll(), nil
 	case tea.MouseMsg:
-		// Only a left press selects; the input is a text field, and moving the
-		// cursor out from under it mid-edit would be a surprise.
-		if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft || m.mode == insertMode {
+		if msg.Action != tea.MouseActionPress {
 			return m, nil
 		}
-		return m.click(msg.Y), nil
+		switch msg.Button {
+		// The wheel moves the viewport and nothing else, so it is safe mid-edit
+		// too: neither the cursor nor the input changes under it.
+		case tea.MouseButtonWheelUp:
+			return m.scrollBy(-wheelRows), nil
+		case tea.MouseButtonWheelDown:
+			return m.scrollBy(wheelRows), nil
+		// Only a left press selects; the input is a text field, and moving the
+		// cursor out from under it mid-edit would be a surprise.
+		case tea.MouseButtonLeft:
+			if m.mode == insertMode {
+				return m, nil
+			}
+			return m.click(msg.Y), nil
+		}
+		return m, nil
 	case tea.KeyMsg:
 		// A terminal paste (⌘V, ctrl+shift+V) arrives as one key event holding
 		// the whole clipboard, not as key presses, so it never reaches typed().

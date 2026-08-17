@@ -18,6 +18,7 @@ a file the board cannot read is reported and nothing starts.
 
   j / k        move the cursor down / up (also ↓ / ↑)
   click        put the cursor on a task
+  wheel        scroll the board
   gg / G       jump to the first / last task
   { / }        jump to the previous / next section
   1 / 2 / 3    move the task to TODO / DOING / DONE

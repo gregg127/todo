@@ -13,6 +13,9 @@ import (
 // scrolloff is the number of context rows kept above and below the cursor.
 const scrolloff = 3
 
+// wheelRows is how far one wheel notch moves the viewport.
+const wheelRows = 3
+
 // Styles use ANSI indices 1–15 only, so the terminal colorscheme restyles the
 // app for free.
 var (
@@ -134,6 +137,15 @@ func (m Model) scroll() Model {
 	if m.offset < 0 {
 		m.offset = 0
 	}
+	return m
+}
+
+// scrollBy moves the viewport delta rows, stopping at the ends of the board. It
+// leaves the cursor alone: looking around is not selecting, and the next key
+// press scrolls the view back to wherever the cursor was left.
+func (m Model) scrollBy(delta int) Model {
+	rows, _ := m.rows()
+	m.offset = min(max(m.offset+delta, 0), max(len(rows)-m.listHeight(len(rows)), 0))
 	return m
 }
 

@@ -1484,6 +1484,46 @@ func TestOnlyALeftPressSelects(t *testing.T) {
 	}
 }
 
+// wheel sends n wheel presses, down for a positive n and up for a negative one.
+func wheel(m Model, n int) Model {
+	button := tea.MouseButtonWheelDown
+	if n < 0 {
+		button, n = tea.MouseButtonWheelUp, -n
+	}
+	for i := 0; i < n; i++ {
+		tm, _ := m.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: button, Y: 2})
+		m = tm.(Model)
+	}
+	return m
+}
+
+func TestTheWheelScrollsTheBoardAndStopsAtBothEnds(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, longBoard(40))
+	m := resize(open(t, dir), 60, 12)
+
+	if m = wheel(m, 1); m.offset != wheelRows {
+		t.Fatalf("one wheel notch moved the viewport to %d, want %d", m.offset, wheelRows)
+	}
+	if got := viewLines(m)[0]; !strings.Contains(got, "task-2") {
+		t.Fatalf("the top row after scrolling is %q, want task-2", got)
+	}
+	// Past the bottom: the last row of the board stays on screen.
+	m = wheel(m, 40)
+	rows, _ := m.rows()
+	if want := len(rows) - m.listHeight(len(rows)); m.offset != want {
+		t.Fatalf("scrolling past the bottom left offset %d, want %d", m.offset, want)
+	}
+	if !strings.Contains(m.View(), "task-39") {
+		t.Fatalf("the bottom of the board is not on screen:\n%s", m.View())
+	}
+	// Past the top again, and the cursor never moved.
+	m = wheel(m, -40)
+	if m.offset != 0 || m.cursor != 0 {
+		t.Fatalf("scrolling back left offset %d cursor %d, want 0 and 0", m.offset, m.cursor)
+	}
+}
+
 func TestAClickWhileTheInputIsOpenChangesNothing(t *testing.T) {
 	m, _ := newBoard3(t)
 
