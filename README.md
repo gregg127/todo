@@ -7,7 +7,7 @@ hand-edit. Vim-style keys, three sections — TODO, DOING, DONE.
 
 ## Install
 
-Needs Go 1.25+ and `make`.
+Needs Go 1.25.13+ and `make`.
 
 ```
 make build           # ./todo
@@ -17,8 +17,12 @@ PREFIX=~/.local/bin make install    # no sudo, if it is on your PATH
 ```
 
 Build and install are separate because `sudo make build` runs go as root: no go
-on sudo's `PATH`, and root-owned files if there is. `sudo make uninstall`
-removes it again.
+on sudo's `PATH`, and root-owned files if there is. `install` copies `./todo` as
+it stands, so build again before installing a change.
+
+`make uninstall` removes it, and wants the same `PREFIX` — under sudo as an
+argument, `sudo make uninstall PREFIX=…`, since sudo drops it from the
+environment.
 
 ## Usage
 
@@ -41,7 +45,13 @@ make run     # a throwaway copy of the example board
 make test
 ```
 
+`go.sum` pins a SHA-256 hash of every dependency's file tree, and `make build`
+runs `go mod verify` to check the module cache against it. Treat `go.sum` diffs
+as security-relevant: a changed hash for a version that did not change means the
+bytes moved under you.
+
 ## Docs
 
 - [overview.md](docs/overview.md) — the design and the file format
-- [security-review.md](docs/security-review.md) — `go.sum` and dependency notes
+- [security-review.md](docs/security-review.md) — the threat model, the findings
+  and the dependency audit
