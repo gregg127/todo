@@ -190,19 +190,25 @@ func (m Model) inputLines() []string {
 	if m.mode != insertMode {
 		return nil
 	}
-	lines := []string{"› " + m.input}
+	// A placeholder rides through the wrap in the caret's column: wrap trims
+	// trailing spaces, so a caret added afterwards would land before the
+	// spaces just typed, or be trimmed away with them.
+	lines := []string{"› " + m.input + caretCell}
 	if m.width > 0 {
-		// A column is held back for the caret, so it never spills onto a row
-		// the layout has not counted.
-		lines = wrap(lines[0], m.width-1)
+		lines = wrap(lines[0], m.width)
 	}
-	lines[len(lines)-1] += m.caret()
+	last := len(lines) - 1
+	lines[last] = strings.TrimSuffix(lines[last], caretCell) + m.caret()
 	return lines
 }
 
-// caret is the block cursor at the end of the input, up on one tick and down on
-// the next so it blinks where the next rune will land. Down it is a plain space:
-// the line is the same width either way, so the text never shifts.
+// caretCell holds the caret's column through the wrap. Any width-one non-space
+// rune would do; this one is visible if it ever escapes.
+const caretCell = "\u2588"
+
+// caret is the block cursor marking where the next rune will land: a reversed
+// space, blinking by falling back to a plain one, so the row is the same width
+// either way and text never shifts.
 func (m Model) caret() string {
 	if !m.blink {
 		return " "

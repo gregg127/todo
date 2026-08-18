@@ -482,10 +482,10 @@ func TestLongInputFoldsOntoTheWindowAndStaysWhole(t *testing.T) {
 	}
 }
 
-func TestTheInputCaretOpensUpAndBlinksOnEveryTick(t *testing.T) {
+func TestTheInputCaretOpensUpAndBlinksWhileIdle(t *testing.T) {
 	m, _ := newBoard3(t)
 
-	for _, keys := range [][]string{{"o", "task"}, {"cc"}} {
+	for _, keys := range [][]string{{"o"}, {"cc"}} {
 		m := send(m, keys...)
 		if !m.blink {
 			t.Fatalf("%v opened the input with the caret down", keys)
@@ -496,6 +496,34 @@ func TestTheInputCaretOpensUpAndBlinksOnEveryTick(t *testing.T) {
 		if m = poll(m); !m.blink {
 			t.Fatalf("%v: the caret did not come back up on the next tick", keys)
 		}
+	}
+}
+
+func TestTypingHoldsTheCaretUp(t *testing.T) {
+	m, _ := newBoard3(t)
+	m = send(m, "o", "task")
+
+	// A key press puts the caret up and the next tick leaves it there, so the
+	// caret stays solid however the ticks fall across the typing.
+	for i := 0; i < 3; i++ {
+		if m = poll(send(m, "x")); !m.blink {
+			t.Fatal("typing put the caret down")
+		}
+	}
+	if m = poll(m); m.blink {
+		t.Fatal("the caret never blinked once the typing stopped")
+	}
+}
+
+func TestTheCaretFollowsTrailingSpaces(t *testing.T) {
+	m, _ := newBoard3(t)
+	m = resize(m, 40, 12)
+	m = send(m, "o", "task", " ", " ")
+
+	// The spaces just typed have to sit to the left of the reversed cell, or
+	// the caret is on the wrong column.
+	if want := "\u203a task  " + cursorStyle.Render(" ") + "\n"; !strings.Contains(m.View(), want) {
+		t.Fatalf("no input row %q in:\n%s", want, m.View())
 	}
 }
 
