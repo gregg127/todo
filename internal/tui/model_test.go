@@ -44,6 +44,10 @@ func keyMsgs(k string) []tea.KeyMsg {
 		return []tea.KeyMsg{{Type: tea.KeySpace, Runes: []rune{' '}}}
 	case "backspace":
 		return []tea.KeyMsg{{Type: tea.KeyBackspace}}
+	case "left":
+		return []tea.KeyMsg{{Type: tea.KeyLeft}}
+	case "right":
+		return []tea.KeyMsg{{Type: tea.KeyRight}}
 	}
 	msgs := make([]tea.KeyMsg, 0, len(k))
 	for _, r := range k {
@@ -524,6 +528,39 @@ func TestTheCaretFollowsTrailingSpaces(t *testing.T) {
 	// the caret is on the wrong column.
 	if want := "\u203a task  " + cursorStyle.Render(" ") + "\n"; !strings.Contains(m.View(), want) {
 		t.Fatalf("no input row %q in:\n%s", want, m.View())
+	}
+}
+
+func TestTheArrowsMoveTheCaretThroughTheTextBeingTyped(t *testing.T) {
+	m, dir := newBoard3(t)
+	m = resize(m, 40, 12)
+
+	// Left off the start and right off the end stay put, so the caret cannot
+	// walk out of the text.
+	m = send(m, "o", "café", "left", "left", "left", "left", "left", "b")
+	if m.input != "bcafé" {
+		t.Fatalf("input = %q, want the rune typed at the start", m.input)
+	}
+	m = send(m, "right", "right", "right", "right", "right", "right", "!")
+	if m.input != "bcafé!" {
+		t.Fatalf("input = %q, want the rune typed at the end", m.input)
+	}
+
+	// Backspace deletes the rune before the caret, not the last one, and a
+	// multi-byte rune goes whole.
+	m = send(m, "left", "backspace")
+	if m.input != "bcaf!" {
+		t.Fatalf("input = %q, want the rune before the caret deleted", m.input)
+	}
+	// The caret is drawn where it sits, not at the end of the row, and it
+	// highlights the rune under it rather than the gap before it.
+	if want := "\u203a bcaf" + cursorStyle.Render("!"); !strings.Contains(m.View(), want) {
+		t.Fatalf("no input row %q in:\n%s", want, m.View())
+	}
+
+	m = send(m, "enter")
+	if got := file(t, dir); !strings.Contains(got, "- [ ] bcaf!\n") {
+		t.Fatalf("file = %q, want the edited title", got)
 	}
 }
 

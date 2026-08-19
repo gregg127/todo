@@ -193,12 +193,25 @@ func (m Model) inputLines() []string {
 	// A placeholder rides through the wrap in the caret's column: wrap trims
 	// trailing spaces, so a caret added afterwards would land before the
 	// spaces just typed, or be trimmed away with them.
-	lines := []string{"› " + m.input + caretCell}
+	// The caret sits on a rune, so the placeholder takes that rune's cell and
+	// the rune itself is drawn reversed under it.
+	r := []rune(m.input)
+	under, rest := " ", ""
+	if m.pos < len(r) {
+		under, rest = string(r[m.pos]), string(r[m.pos+1:])
+	}
+	lines := []string{"› " + string(r[:m.pos]) + caretCell + rest}
 	if m.width > 0 {
 		lines = wrap(lines[0], m.width)
 	}
-	last := len(lines) - 1
-	lines[last] = strings.TrimSuffix(lines[last], caretCell) + m.caret()
+	// The caret can be on any row now that it moves, so its placeholder is
+	// swapped wherever the wrap put it.
+	for i, line := range lines {
+		if strings.Contains(line, caretCell) {
+			lines[i] = strings.Replace(line, caretCell, m.caret(under), 1)
+			break
+		}
+	}
 	return lines
 }
 
@@ -206,14 +219,14 @@ func (m Model) inputLines() []string {
 // rune would do; this one is visible if it ever escapes.
 const caretCell = "\u2588"
 
-// caret is the block cursor marking where the next rune will land: a reversed
-// space, blinking by falling back to a plain one, so the row is the same width
-// either way and text never shifts.
-func (m Model) caret() string {
+// caret is the block cursor over the rune it sits on — a space past the end of
+// the text — reversed, and blinking by falling back to the plain rune, so the
+// row is the same width either way and text never shifts.
+func (m Model) caret(under string) string {
 	if !m.blink {
-		return " "
+		return under
 	}
-	return cursorStyle.Render(" ")
+	return cursorStyle.Render(under)
 }
 
 // hintLines wraps the hint bar onto as many rows as it needs.

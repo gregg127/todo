@@ -33,9 +33,12 @@ type Model struct {
 	// board row on screen.
 	width, height, offset int
 	// mode is normalMode, insertMode or filterMode; input is the text being
-	// typed in insert mode and filter is the live filter query.
+	// typed in insert mode, pos the caret's rune offset into it, and filter
+	// the live filter query. The filter has no caret of its own: it is always
+	// typed at the end.
 	mode   int
 	input  string
+	pos    int
 	filter string
 	// blink is the caret's phase: on for one tick, off for the next. The
 	// terminal's own cursor sits wherever the last rendered row ends, so the
@@ -327,7 +330,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // insert opens the one-line input for a new task at slice index at.
 func (m Model) insert(at int, s board.Status) Model {
-	m.mode, m.input, m.editing = insertMode, "", -1
+	m.mode, m.input, m.pos, m.editing = insertMode, "", 0, -1
 	m.insertAt, m.insertStatus = at, s
 	// The input opens with the caret up, not half a tick of nothing.
 	m.blink = true
@@ -342,6 +345,8 @@ func (m Model) edit() Model {
 	}
 	m.mode, m.editing = insertMode, i
 	m.input = m.tasks[m.editing].Title
+	// The caret opens after the text, where typing carries on from.
+	m.pos = len([]rune(m.input))
 	m.blink = true
 	return m
 }
@@ -349,7 +354,7 @@ func (m Model) edit() Model {
 // confirm applies the input. Empty or whitespace-only text creates nothing.
 func (m Model) confirm() Model {
 	title := strings.TrimSpace(m.input)
-	m.mode, m.input = normalMode, ""
+	m.mode, m.input, m.pos = normalMode, "", 0
 	if title == "" {
 		return m
 	}
@@ -381,11 +386,11 @@ func (m Model) insertKey(k string) (tea.Model, tea.Cmd) {
 	case "enter":
 		return m.confirm(), nil
 	case "esc":
-		m.mode, m.input = normalMode, ""
+		m.mode, m.input, m.pos = normalMode, "", 0
 		return m, nil
 	}
 	// Every other printable key is text, so a task can be called "quit the job".
-	m.input = typed(m.input, k)
+	m.input, m.pos = typed(m.input, k, m.pos)
 	m.blink, m.typing = true, true
 	return m, nil
 }
@@ -406,26 +411,39 @@ func (m Model) pasted(text string) Model {
 	}, text)
 	switch m.mode {
 	case insertMode:
-		m.input += text
+		r := []rune(m.input)
+		m.input = string(r[:m.pos]) + text + string(r[m.pos:])
+		m.pos += len([]rune(text))
 	case filterMode:
 		m.filter += text
 	}
 	return m.clampCursor().scroll()
 }
 
-// typed applies a key press to a line being typed: backspace deletes the last
-// rune, any single-rune key appends itself, everything else is ignored.
-func typed(s, k string) string {
-	if k == "backspace" {
-		if r := []rune(s); len(r) > 0 {
-			return string(r[:len(r)-1])
+// typed applies a key press to a line being typed with the caret at rune
+// offset pos: the arrows move the caret, backspace deletes the rune before it,
+// any single-rune key is inserted there, everything else is ignored.
+func typed(s, k string, pos int) (string, int) {
+	r := []rune(s)
+	switch k {
+	case "left":
+		if pos > 0 {
+			pos--
 		}
-		return s
+	case "right":
+		if pos < len(r) {
+			pos++
+		}
+	case "backspace":
+		if pos > 0 {
+			return string(slices.Delete(r, pos-1, pos)), pos - 1
+		}
+	default:
+		if k := []rune(k); len(k) == 1 {
+			return string(slices.Insert(r, pos, k[0])), pos + 1
+		}
 	}
-	if r := []rune(k); len(r) == 1 {
-		return s + k
-	}
-	return s
+	return s, pos
 }
 
 // Only Enter and Esc are commands; every printable key narrows the list.
@@ -438,7 +456,8 @@ func (m Model) filterKey(k string) (tea.Model, tea.Cmd) {
 		m.mode, m.filter = normalMode, ""
 		return m.clampCursor().scroll(), nil
 	}
-	m.filter = typed(m.filter, k)
+	// The filter is typed at the end, so the caret is always after it.
+	m.filter, _ = typed(m.filter, k, len([]rune(m.filter)))
 	return m.clampCursor().scroll(), nil
 }
 
