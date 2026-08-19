@@ -1,8 +1,10 @@
 package tui
 
 import (
+	"maps"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -46,9 +48,14 @@ type Model struct {
 	// under a moving hand.
 	blink  bool
 	typing bool
-	// collapsed hides the contents of the DONE section. It starts on: finished
-	// work is context, not the working list.
+	// collapsed hides the contents of the DONE section. It starts on unless the
+	// file's metadata says otherwise: finished work is context, not the working
+	// list.
 	collapsed bool
+	// meta is the file's frontmatter, nil until there is something to write. It
+	// holds whatever keys the file had, so a save keeps the ones the app does
+	// not read.
+	meta board.Meta
 	// editing is the index of the task being edited, or -1 when the input
 	// will create a new task at insertAt with status insertStatus.
 	editing      int
@@ -105,7 +112,7 @@ func (m Model) save() Model {
 	if m.readErr != "" {
 		return m
 	}
-	if t, err := board.Save(m.path, m.tasks); err == nil {
+	if t, err := board.Save(m.path, m.tasks, m.meta); err == nil {
 		m.saved = t
 	}
 	return m
@@ -195,16 +202,28 @@ func (m Model) cursorTo(i int) Model {
 // is not there yet. A file the app cannot read is an error and no model: the
 // board never opens on a file it would damage by saving.
 func New(path string) (Model, error) {
-	tasks, err := board.Load(path)
+	tasks, meta, err := board.Load(path)
 	if err != nil {
 		return Model{}, err
 	}
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		if _, err := board.Save(path, nil); err != nil {
+		if _, err := board.Save(path, nil, nil); err != nil {
 			return Model{}, err
 		}
 	}
-	return Model{path: path, tasks: tasks, saved: board.ModTime(path), collapsed: true}, nil
+	m := Model{path: path, tasks: tasks, meta: meta, saved: board.ModTime(path)}
+	m.collapsed = collapsedDone(meta, true)
+	return m, nil
+}
+
+// collapsedDone reads the DONE section's fold state out of a board file's
+// metadata, falling back to fallback when the file does not carry it — an old
+// board, or one whose fold has never been toggled.
+func collapsedDone(meta board.Meta, fallback bool) bool {
+	if v, ok := meta[board.CollapsedDone]; ok {
+		return v == "true"
+	}
+	return fallback
 }
 
 func (m Model) matches(t board.Task) bool {
@@ -505,7 +524,14 @@ func (m Model) key(k string) (tea.Model, tea.Cmd) {
 		}
 	case "C":
 		m.collapsed = !m.collapsed
-		return m.clampCursor().scroll(), nil
+		// The fold outlives the session, so it goes in the file — and only from
+		// here, so a board nobody has folded keeps no metadata at all.
+		m.meta = maps.Clone(m.meta)
+		if m.meta == nil {
+			m.meta = board.Meta{}
+		}
+		m.meta[board.CollapsedDone] = strconv.FormatBool(m.collapsed)
+		return m.save().clampCursor().scroll(), nil
 	case "{":
 		return m.jumpSection(-1), nil
 	case "}":

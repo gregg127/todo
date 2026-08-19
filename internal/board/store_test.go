@@ -12,7 +12,7 @@ const emptyBoard = "## TODO\n\n## DOING\n\n## DONE\n"
 const board3 = "## TODO\n- [ ] one\n- [ ] two\n\n## DOING\n- [ ] three\n\n## DONE\n- [x] four\n"
 
 func TestRenderEmptyBoard(t *testing.T) {
-	if got, want := Render(nil), "## TODO\n\n## DOING\n\n## DONE\n"; got != want {
+	if got, want := Render(nil, nil), "## TODO\n\n## DOING\n\n## DONE\n"; got != want {
 		t.Fatalf("Render(empty) = %q, want %q", got, want)
 	}
 }
@@ -59,6 +59,16 @@ func TestParseAndRender(t *testing.T) {
 			want:  "## TODO\n\n- [ ] write - [ ] in a title\n\n## DOING\n\n## DONE\n",
 		},
 		{
+			name:  "frontmatter is kept and the board below it read",
+			input: "---\ncollapsed-done: true\n---\n\n## TODO\n- [ ] a\n",
+			want:  "---\ncollapsed-done: true\n---\n\n## TODO\n\n- [ ] a\n\n## DOING\n\n## DONE\n",
+		},
+		{
+			name:  "an unknown metadata key is written back untouched",
+			input: "---\nzz: 1\ncollapsed-done: false\n---\n## TODO\n",
+			want:  "---\ncollapsed-done: false\nzz: 1\n---\n\n## TODO\n\n## DOING\n\n## DONE\n",
+		},
+		{
 			name:  "all three sections in order",
 			input: "## DONE\n- [x] c\n\n## TODO\n- [ ] a\n\n## DOING\n- [ ] b\n",
 			want:  "## TODO\n\n- [ ] a\n\n## DOING\n\n- [ ] b\n\n## DONE\n\n- [x] c\n",
@@ -101,6 +111,9 @@ func TestValidateAcceptsWhatTheParserKeepsAndRejectsWhatItDrops(t *testing.T) {
 		"## DONE\r\n- [X] windows line endings and an uppercase box\r\n",
 		"## DOING\n- [ ] a\n   \n## TODO\n- [ ] b\n",
 		"## TODO\n- [ ] punctuation, dashes — and emoji 🎉 are all just text\n",
+		"---\ncollapsed-done: true\n---\n\n" + board3,
+		// An empty block holds nothing, so a save dropping it loses nothing.
+		"---\n---\n" + board3,
 	}
 	for _, text := range valid {
 		if err := Validate(text); err != nil {
@@ -115,6 +128,11 @@ func TestValidateAcceptsWhatTheParserKeepsAndRejectsWhatItDrops(t *testing.T) {
 		"- [ ] an item before any heading\n",
 		"## TODO\n- [ ] a\nprose after a task\n",
 		"## TODO\n  - [ ] an indented item\n",
+		// Metadata the app would not write back the same way is refused, like
+		// anything else a save would rewrite.
+		"---\ncollapsed-done: true\n" + board3, // no closing fence
+		"---\ncollapsed-done:true\n---\n" + board3,
+		"---\njust a note\n---\n" + board3,
 		// Escape sequences in a title reach the terminal as they are, so the
 		// file is refused rather than opened.
 		"## TODO\n- [ ] buy milk\x1b]52;c;aGVsbG8=\x07\n", // OSC 52 clipboard write
@@ -130,7 +148,7 @@ func TestValidateAcceptsWhatTheParserKeepsAndRejectsWhatItDrops(t *testing.T) {
 }
 
 func TestLoadMissingFileIsEmptyAndNoError(t *testing.T) {
-	b, err := Load(t.TempDir() + "/nope.md")
+	b, _, err := Load(t.TempDir() + "/nope.md")
 	if err != nil {
 		t.Fatalf("Load of missing file: %v", err)
 	}

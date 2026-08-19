@@ -35,7 +35,7 @@ func (m Model) reload() Model {
 		title = m.tasks[visible[m.cursor]].Title
 	}
 
-	tasks, err := board.Load(m.path)
+	tasks, meta, err := board.Load(m.path)
 	if err != nil {
 		// Hold the board as it is and stop saving until the file reads again,
 		// rather than rewrite it without the lines the parser cannot read.
@@ -44,6 +44,10 @@ func (m Model) reload() Model {
 	}
 	m.readErr = ""
 	m.tasks = tasks
+	// A hand-edited fold state is followed; a file that carries none leaves the
+	// section as the reader left it.
+	m.collapsed = collapsedDone(meta, m.collapsed)
+	m.meta = meta
 	m.undo, m.redo = nil, nil
 	m.saved = board.ModTime(m.path)
 

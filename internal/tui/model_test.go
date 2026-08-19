@@ -249,6 +249,10 @@ func cursorLine(t *testing.T, m Model) string {
 // board3 is a board with tasks in all three sections.
 const board3 = "## TODO\n- [ ] one\n- [ ] two\n\n## DOING\n- [ ] three\n\n## DONE\n- [x] four\n"
 
+// expanded is the metadata the app writes once the DONE section has been
+// unfolded, which every C press below leaves at the top of the file.
+const expanded = "---\ncollapsed-done: false\n---\n\n"
+
 // newBoard3 expands DONE, which starts collapsed, so the cursor tests can walk
 // the whole board.
 func newBoard3(t *testing.T) (Model, string) {
@@ -622,7 +626,7 @@ func TestStatusChangeMovesTheTaskToTheTopOfTheTargetSection(t *testing.T) {
 	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n\n## DONE\n- [x] old\n")
 	m := send(open(t, dir), "C", "3")
 
-	if got, want := file(t, dir), "## TODO\n\n- [ ] two\n\n## DOING\n\n## DONE\n\n- [x] one\n- [x] old\n"; got != want {
+	if got, want := file(t, dir), expanded+"## TODO\n\n- [ ] two\n\n## DOING\n\n## DONE\n\n- [x] one\n- [x] old\n"; got != want {
 		t.Fatalf("file = %q, want %q", got, want)
 	}
 	if !strings.Contains(m.View(), "TODO (1)") || !strings.Contains(m.View(), "DONE (2)") {
@@ -668,7 +672,7 @@ func TestEveryStatusChangeIsPersisted(t *testing.T) {
 
 	m := send(open(t, dir), "C", "2", "gg", "3")
 
-	want := "## TODO\n\n## DOING\n\n- [ ] one\n\n## DONE\n\n- [x] two\n"
+	want := expanded + "## TODO\n\n## DOING\n\n- [ ] one\n\n## DONE\n\n- [x] two\n"
 	if got := file(t, dir); got != want {
 		t.Fatalf("file = %q, want %q", got, want)
 	}
@@ -1007,6 +1011,38 @@ func TestDoneStartsCollapsedAndCTogglesIt(t *testing.T) {
 	}
 }
 
+func TestTheDoneFoldIsRememberedInTheFile(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, board3)
+
+	// A board whose fold has never been toggled carries no metadata at all.
+	send(open(t, dir), "o", "five", "enter")
+	if got := file(t, dir); strings.HasPrefix(got, "---") {
+		t.Fatalf("an untouched fold wrote metadata: %q", got)
+	}
+
+	send(open(t, dir), "C")
+	if got := file(t, dir); !strings.HasPrefix(got, expanded) {
+		t.Fatalf("C did not record the fold: %q", got)
+	}
+	m := open(t, dir)
+	if !strings.Contains(m.View(), "● four") {
+		t.Fatalf("the board did not reopen expanded:\n%s", m.View())
+	}
+
+	send(m, "C")
+	if m := open(t, dir); strings.Contains(m.View(), "● four") {
+		t.Fatalf("the board did not reopen folded:\n%s", m.View())
+	}
+
+	// A hand-edit of the metadata is followed, like a hand-edit of a task.
+	m = open(t, dir)
+	write(t, dir, "---\ncollapsed-done: false\n---\n\n"+board3)
+	if m = poll(m); !strings.Contains(m.View(), "● four") {
+		t.Fatalf("a hand-edited fold state was ignored:\n%s", m.View())
+	}
+}
+
 func TestCollapsedDoneIsOutOfReachOfTheCursor(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, board3)
@@ -1087,7 +1123,7 @@ func TestRedoOnAnEmptyStackChangesNothing(t *testing.T) {
 	// Nothing undone yet, and a redo after a redo has caught up.
 	m := send(open(t, dir), "C", "r", "3", "u", "r", "r")
 
-	want := "## TODO\n\n## DOING\n\n## DONE\n\n- [x] one\n"
+	want := expanded + "## TODO\n\n## DOING\n\n## DONE\n\n- [x] one\n"
 	if got := file(t, dir); got != want {
 		t.Fatalf("after redo file = %q, want %q", got, want)
 	}
@@ -1520,9 +1556,11 @@ func TestClickingUsesTheScrolledViewport(t *testing.T) {
 func TestAClickChangesNothingButTheCursor(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, board3)
-	before := file(t, dir)
 
+	// C itself writes the fold state, so the file is read after it: a click on
+	// top of that must leave it alone.
 	m := send(open(t, dir), "C")
+	before := file(t, dir)
 	m = click(m, 6)
 
 	if got := file(t, dir); got != before {

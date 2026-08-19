@@ -24,6 +24,12 @@ beneath them. That is the whole grammar. The section wins over the checkbox, so
 a `- [x]` under `## TODO` is a TODO task and gets its box rewritten on the next
 save. Order within a section is the order of the lines.
 
+A file may also open with a `---` fenced block of `key: value` lines. One key
+is read, `collapsed-done`, which is where the DONE section's fold outlives the
+session; the block is written only once you have toggled the fold, so a board
+nobody has folded stays plain Markdown, and a key the app does not know is
+written back untouched.
+
 Because a save rewrites the file from the parsed board, anything the parser
 does not understand would be dropped. Rather than eat your notes, the app
 refuses to open a file it cannot read whole and names the first bad line, and
