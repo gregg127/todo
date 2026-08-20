@@ -5,10 +5,8 @@ import (
 	"testing"
 )
 
-// emptyBoard is the file Render writes for a board with no tasks.
 const emptyBoard = "## TODO\n\n## DOING\n\n## DONE\n"
 
-// board3 is a board with tasks in all three sections.
 const board3 = "## TODO\n- [ ] one\n- [ ] two\n\n## DOING\n- [ ] three\n\n## DONE\n- [x] four\n"
 
 func TestRenderEmptyBoard(t *testing.T) {
@@ -88,8 +86,6 @@ func TestParseAndRender(t *testing.T) {
 	}
 }
 
-// The example file is the format's documentation, so it has to be exactly what
-// the app writes: a hand-edit of it must survive a save untouched.
 func TestExampleFileIsWrittenInTheAppsOwnFormat(t *testing.T) {
 	want, err := os.ReadFile("../../docs/todo-database-example.md")
 	if err != nil {
@@ -112,7 +108,6 @@ func TestValidateAcceptsWhatTheParserKeepsAndRejectsWhatItDrops(t *testing.T) {
 		"## DOING\n- [ ] a\n   \n## TODO\n- [ ] b\n",
 		"## TODO\n- [ ] punctuation, dashes — and emoji 🎉 are all just text\n",
 		"---\ncollapsed-done: true\n---\n\n" + board3,
-		// An empty block holds nothing, so a save dropping it loses nothing.
 		"---\n---\n" + board3,
 	}
 	for _, text := range valid {
@@ -128,13 +123,9 @@ func TestValidateAcceptsWhatTheParserKeepsAndRejectsWhatItDrops(t *testing.T) {
 		"- [ ] an item before any heading\n",
 		"## TODO\n- [ ] a\nprose after a task\n",
 		"## TODO\n  - [ ] an indented item\n",
-		// Metadata the app would not write back the same way is refused, like
-		// anything else a save would rewrite.
 		"---\ncollapsed-done: true\n" + board3, // no closing fence
 		"---\ncollapsed-done:true\n---\n" + board3,
 		"---\njust a note\n---\n" + board3,
-		// Escape sequences in a title reach the terminal as they are, so the
-		// file is refused rather than opened.
 		"## TODO\n- [ ] buy milk\x1b]52;c;aGVsbG8=\x07\n", // OSC 52 clipboard write
 		"## TODO\n- [ ] buy milk\x1b]0;pwned\x07\n",       // OSC 0 window title
 		"## TODO\n- [ ] buy milk\x07\n",                   // bare BEL, which ansi.Strip keeps

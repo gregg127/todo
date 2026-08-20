@@ -13,15 +13,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// send feeds keys through Update. Each argument is either a special key name
-// ("enter", "esc", "space", "backspace") or literal text, in which case every
-// rune is sent as its own key press.
 func send(m Model, keys ...string) Model {
 	m, _ = sendCmd(m, keys...)
 	return m
 }
 
-// sendCmd is send, also returning the command from the last key press.
 func sendCmd(m Model, keys ...string) (Model, tea.Cmd) {
 	var cmd tea.Cmd
 	for _, k := range keys {
@@ -56,7 +52,6 @@ func keyMsgs(k string) []tea.KeyMsg {
 	return msgs
 }
 
-// file returns the contents of the todo file in dir, or "" if there is none.
 func file(t *testing.T, dir string) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(dir, board.DefaultFile))
@@ -110,11 +105,8 @@ func TestLaunchCreatesTheFileAndQuittingChangesNothingElse(t *testing.T) {
 	}
 }
 
-// emptyBoard is the file the app writes for a board with no tasks.
 const emptyBoard = "## TODO\n\n## DOING\n\n## DONE\n"
 
-// open builds a model over dir's default todo file, failing the test if the
-// file cannot be read.
 func open(t *testing.T, dir string) Model {
 	t.Helper()
 	m, err := New(filepath.Join(dir, board.DefaultFile))
@@ -191,7 +183,6 @@ func TestAFileTheBoardCannotReadIsRefusedAndLeftAlone(t *testing.T) {
 	}
 }
 
-// write puts contents into dir's todo file.
 func write(t *testing.T, dir, contents string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, board.DefaultFile), []byte(contents), 0o644); err != nil {
@@ -234,8 +225,6 @@ func TestEmptyFileIsAnEmptyBoard(t *testing.T) {
 	}
 }
 
-// cursorLine returns the task line marked with the cursor gutter, or "" if
-// nothing is marked.
 func cursorLine(t *testing.T, m Model) string {
 	t.Helper()
 	for _, line := range strings.Split(m.View(), "\n") {
@@ -246,15 +235,10 @@ func cursorLine(t *testing.T, m Model) string {
 	return ""
 }
 
-// board3 is a board with tasks in all three sections.
 const board3 = "## TODO\n- [ ] one\n- [ ] two\n\n## DOING\n- [ ] three\n\n## DONE\n- [x] four\n"
 
-// expanded is the metadata the app writes once the DONE section has been
-// unfolded, which every C press below leaves at the top of the file.
 const expanded = "---\ncollapsed-done: false\n---\n\n"
 
-// newBoard3 expands DONE, which starts collapsed, so the cursor tests can walk
-// the whole board.
 func newBoard3(t *testing.T) (Model, string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -316,12 +300,10 @@ func TestGGAndG(t *testing.T) {
 func TestPendingGIsCancelledAndSwallowsTheNextKey(t *testing.T) {
 	m, _ := newBoard3(t)
 
-	// g then j: the sequence is cancelled and the j is discarded.
 	m = send(m, "g", "j")
 	if got := cursorLine(t, m); got != "○ one" {
 		t.Fatalf("cancelling key was re-dispatched, cursor on %q", got)
 	}
-	// The pending prefix is gone, so the next j moves normally.
 	m = send(m, "j")
 	if got := cursorLine(t, m); got != "○ two" {
 		t.Fatalf("after a cancelled sequence j moved to %q", got)
@@ -332,7 +314,6 @@ func TestPendingPrefixSurvivesUnrelatedMessages(t *testing.T) {
 	m, _ := newBoard3(t)
 	m = send(m, "G", "g")
 
-	// No timer: any number of non-key messages leave the g pending.
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = tm.(Model)
 
@@ -354,13 +335,11 @@ func TestCursorMovementOnAnEmptyBoardIsHarmless(t *testing.T) {
 	}
 }
 
-// resize sends a window size to the model.
 func resize(m Model, w, h int) Model {
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	return tm.(Model)
 }
 
-// longBoard is a TODO section with n tasks named task-0…task-(n-1).
 func longBoard(n int) string {
 	var b strings.Builder
 	b.WriteString("## TODO\n")
@@ -409,8 +388,6 @@ func TestScrolloffKeepsThreeRowsOfContext(t *testing.T) {
 	if cursor < scrolloff {
 		t.Fatalf("only %d rows above the cursor:\n%s", cursor, m.View())
 	}
-	// The last line is the hint bar, so board rows below the cursor are
-	// len(lines)-1-cursor-1.
 	if below := len(lines) - 2 - cursor; below < scrolloff {
 		t.Fatalf("only %d rows below the cursor:\n%s", below, m.View())
 	}
@@ -483,7 +460,6 @@ func TestLongInputFoldsOntoTheWindowAndStaysWhole(t *testing.T) {
 			t.Fatalf("row is %d cells wide, window is 30: %q", len([]rune(line)), line)
 		}
 	}
-	// Every word typed is still on screen, folded across rows rather than cut.
 	onScreen := strings.Join(strings.Fields(strings.Join(lines, " ")), " ")
 	if !strings.Contains(onScreen, text) {
 		t.Fatalf("input was cut, not folded:\n%s", m.View())
@@ -511,8 +487,6 @@ func TestTypingHoldsTheCaretUp(t *testing.T) {
 	m, _ := newBoard3(t)
 	m = send(m, "o", "task")
 
-	// A key press puts the caret up and the next tick leaves it there, so the
-	// caret stays solid however the ticks fall across the typing.
 	for i := 0; i < 3; i++ {
 		if m = poll(send(m, "x")); !m.blink {
 			t.Fatal("typing put the caret down")
@@ -528,8 +502,6 @@ func TestTheCaretFollowsTrailingSpaces(t *testing.T) {
 	m = resize(m, 40, 12)
 	m = send(m, "o", "task", " ", " ")
 
-	// The spaces just typed have to sit to the left of the reversed cell, or
-	// the caret is on the wrong column.
 	if want := "\u203a task  " + cursorStyle.Render(" ") + "\n"; !strings.Contains(m.View(), want) {
 		t.Fatalf("no input row %q in:\n%s", want, m.View())
 	}
@@ -539,8 +511,6 @@ func TestTheArrowsMoveTheCaretThroughTheTextBeingTyped(t *testing.T) {
 	m, dir := newBoard3(t)
 	m = resize(m, 40, 12)
 
-	// Left off the start and right off the end stay put, so the caret cannot
-	// walk out of the text.
 	m = send(m, "o", "café", "left", "left", "left", "left", "left", "b")
 	if m.input != "bcafé" {
 		t.Fatalf("input = %q, want the rune typed at the start", m.input)
@@ -550,14 +520,10 @@ func TestTheArrowsMoveTheCaretThroughTheTextBeingTyped(t *testing.T) {
 		t.Fatalf("input = %q, want the rune typed at the end", m.input)
 	}
 
-	// Backspace deletes the rune before the caret, not the last one, and a
-	// multi-byte rune goes whole.
 	m = send(m, "left", "backspace")
 	if m.input != "bcaf!" {
 		t.Fatalf("input = %q, want the rune before the caret deleted", m.input)
 	}
-	// The caret is drawn where it sits, not at the end of the row, and it
-	// highlights the rune under it rather than the gap before it.
 	if want := "\u203a bcaf" + cursorStyle.Render("!"); !strings.Contains(m.View(), want) {
 		t.Fatalf("no input row %q in:\n%s", want, m.View())
 	}
@@ -574,8 +540,6 @@ func TestTheCaretNeverWidensTheInputRowOrTheView(t *testing.T) {
 	m := resize(open(t, dir), 20, 12)
 	m = send(m, "o")
 
-	// One rune at a time, unbroken so it folds mid-word: every length in turn
-	// fills the row, and the caret has to fit on it.
 	for i := 0; i < 30; i++ {
 		m = send(m, "x")
 		lines := viewLines(m)
@@ -685,8 +649,6 @@ func TestFirstMutationCreatesTheFile(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "## TODO\n- [ ] one\n")
 	m := open(t, dir)
-	// The board is loaded; the file is then gone, as it would be in a fresh
-	// directory.
 	if err := os.Remove(filepath.Join(dir, board.DefaultFile)); err != nil {
 		t.Fatal(err)
 	}
@@ -755,7 +717,6 @@ func TestReorderingStopsAtSectionBoundaries(t *testing.T) {
 	write(t, dir, "## TODO\n- [ ] one\n\n## DOING\n- [ ] two\n\n## DONE\n- [x] three\n")
 	before := file(t, dir)
 
-	// J on the only (and therefore last) TODO task, K on the first DOING task.
 	m := send(open(t, dir), "J")
 	if got := file(t, dir); got != before {
 		t.Fatalf("J across a section boundary changed the file: %q", got)
@@ -996,7 +957,6 @@ func TestDoneStartsCollapsedAndCTogglesIt(t *testing.T) {
 	if strings.Contains(v, "● four") {
 		t.Fatalf("DONE did not start collapsed:\n%s", v)
 	}
-	// The count is still there, so nothing looks lost.
 	if !strings.Contains(v, "DONE (1)") {
 		t.Fatalf("collapsed DONE lost its count:\n%s", v)
 	}
@@ -1015,7 +975,6 @@ func TestTheDoneFoldIsRememberedInTheFile(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, board3)
 
-	// A board whose fold has never been toggled carries no metadata at all.
 	send(open(t, dir), "o", "five", "enter")
 	if got := file(t, dir); strings.HasPrefix(got, "---") {
 		t.Fatalf("an untouched fold wrote metadata: %q", got)
@@ -1035,7 +994,6 @@ func TestTheDoneFoldIsRememberedInTheFile(t *testing.T) {
 		t.Fatalf("the board did not reopen folded:\n%s", m.View())
 	}
 
-	// A hand-edit of the metadata is followed, like a hand-edit of a task.
 	m = open(t, dir)
 	write(t, dir, "---\ncollapsed-done: false\n---\n\n"+board3)
 	if m = poll(m); !strings.Contains(m.View(), "● four") {
@@ -1047,9 +1005,6 @@ func TestCollapsedDoneIsOutOfReachOfTheCursor(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, board3)
 
-	// G is the last task on the board, which with DONE collapsed is the DOING
-	// one, and a status change into DONE folds the task away without stranding
-	// the cursor.
 	m := send(open(t, dir), "G")
 	if got := cursorLine(t, m); got != "◐ three" {
 		t.Fatalf("G went to %q, want the last unfolded task", got)
@@ -1086,8 +1041,6 @@ func TestSectionJumpsSkipEmptySectionsAndStopAtTheEnds(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "## TODO\n- [ ] one\n\n## DOING\n\n## DONE\n- [x] two\n")
 
-	// DOING is empty, so } jumps straight past it, and again at the end of the
-	// board nothing moves.
 	m := send(open(t, dir), "C", "}", "}")
 	if got := cursorLine(t, m); got != "● two" {
 		t.Fatalf("cursor on %q, want the DONE task", got)
@@ -1120,7 +1073,6 @@ func TestRedoOnAnEmptyStackChangesNothing(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "## TODO\n- [ ] one\n\n## DOING\n\n## DONE\n")
 
-	// Nothing undone yet, and a redo after a redo has caught up.
 	m := send(open(t, dir), "C", "r", "3", "u", "r", "r")
 
 	want := expanded + "## TODO\n\n## DOING\n\n## DONE\n\n- [x] one\n"
@@ -1136,8 +1088,6 @@ func TestNewMutationDropsTheRedoStack(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "## TODO\n- [ ] one\n\n## DOING\n\n## DONE\n")
 
-	// Undo the status change, then fork the history with a new mutation: the
-	// undone change must no longer be reachable.
 	send(open(t, dir), "3", "u", "o", "two", "enter", "r")
 
 	want := "## TODO\n\n- [ ] one\n- [ ] two\n\n## DOING\n\n## DONE\n"
@@ -1150,11 +1100,7 @@ func TestNoOpKeyPressPushesNoSnapshot(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "## TODO\n- [ ] one\n\n## DOING\n- [ ] two\n")
 
-	// 2 on a DOING task and K on the first task are both no-ops; a following
-	// u must undo the status change, not one of them.
 	m := send(open(t, dir), "3")
-	// gg lands on the DOING task; 2 there, and K/J on the only task in its
-	// section, are all no-ops, as is a cancelled input.
 	m = send(m, "gg", "2", "K", "J", "o", "esc")
 	m = send(m, "u")
 
@@ -1168,7 +1114,6 @@ func TestUndoClampsTheCursorIntoTheRestoredList(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n- [ ] three\n")
 
-	// Add a task at the bottom, put the cursor on it, then undo it away.
 	m := send(open(t, dir), "G", "o", "four", "enter", "u")
 
 	if got := cursorLine(t, m); got != "○ three" {
@@ -1263,7 +1208,6 @@ func TestActingOnAFilteredTaskAndTheFilterPersists(t *testing.T) {
 		t.Fatalf("the filter was dropped after acting on a match:\n%s", m.View())
 	}
 
-	// dd and cc act on the filtered task under the cursor too.
 	m = send(m, "gg", "cc", "backspace", "backspace", "backspace", "backspace", "ing", "enter")
 	m = send(m, "dd")
 
@@ -1304,7 +1248,6 @@ func TestNAndNAreNotBound(t *testing.T) {
 	}
 }
 
-// poll sends one watcher tick.
 func poll(m Model) Model {
 	tm, _ := m.Update(tickMsg(time.Now()))
 	return tm.(Model)
@@ -1350,15 +1293,12 @@ func TestOwnWritesNeverTriggerAReload(t *testing.T) {
 			t.Fatalf("a poll after the app's own write moved the cursor to %q", got)
 		}
 	}
-	// The undo stack survives, so no reload happened.
 	m = send(m, "u")
 	if !strings.Contains(m.View(), "○ two") {
 		t.Fatalf("the undo stack was cleared by the app's own writes:\n%s", m.View())
 	}
 }
 
-// A hand-edit can leave the file unreadable. The app must not save over it:
-// the next save would rewrite the file without the lines the parser dropped.
 func TestAHandEditTheParserCannotReadIsNeverSavedOver(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "## TODO\n- [ ] one\n")
@@ -1376,7 +1316,6 @@ func TestAHandEditTheParserCannotReadIsNeverSavedOver(t *testing.T) {
 		t.Fatalf("nothing on screen says saving is off:\n%s", m.View())
 	}
 
-	// Fixing the file by hand puts the board back in charge of it.
 	write(t, dir, "## TODO\n- [ ] one\n- [ ] two\n")
 	m = poll(m)
 	m = send(m, "G", "dd")
@@ -1449,7 +1388,6 @@ func TestHandTickedBoxReloadsAsTodoAndIsNormalizedOnTheNextSave(t *testing.T) {
 	}
 }
 
-// paste feeds a terminal paste — the whole clipboard in one key event.
 func paste(m Model, text string) Model {
 	tm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(text), Paste: true})
 	return tm.(Model)
@@ -1500,7 +1438,6 @@ func TestPasteInNormalModeChangesNothing(t *testing.T) {
 	}
 }
 
-// click sends a left mouse press on screen row y.
 func click(m Model, y int) Model {
 	tm, _ := m.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, X: 4, Y: y})
 	return tm.(Model)
@@ -1509,7 +1446,6 @@ func click(m Model, y int) Model {
 func TestClickingATaskSelectsIt(t *testing.T) {
 	m, _ := newBoard3(t)
 
-	// Rows: TODO, one, two, DOING, three, DONE, four.
 	for y, want := range map[int]string{2: "○ two", 4: "◐ three", 6: "● four", 1: "○ one"} {
 		if got := cursorLine(t, click(m, y)); got != want {
 			t.Fatalf("click on row %d selected %q, want %q", y, got, want)
@@ -1521,7 +1457,6 @@ func TestClickingASectionHeaderOrEmptySpaceSelectsNothing(t *testing.T) {
 	m, _ := newBoard3(t)
 	m = send(m, "j")
 
-	// -1 is the row-0 mouse report Bubble Tea normalises past zero.
 	for _, y := range []int{-1, 0, 3, 5, 7, 20} {
 		if got := cursorLine(t, click(m, y)); got != "○ two" {
 			t.Fatalf("click on row %d moved the cursor to %q", y, got)
@@ -1535,7 +1470,6 @@ func TestClickingAFoldedTitleSelectsThatTask(t *testing.T) {
 	write(t, dir, "## TODO\n- [ ] one\n- [ ] "+strings.TrimSpace(long)+"\n- [ ] three\n")
 	m := resize(open(t, dir), 20, 24)
 
-	// Rows: TODO, one, then the folded task over several rows.
 	if got := cursorLine(t, click(m, 3)); !strings.Contains(got, "word") {
 		t.Fatalf("click on a continuation row selected %q", got)
 	}
@@ -1557,8 +1491,6 @@ func TestAClickChangesNothingButTheCursor(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, board3)
 
-	// C itself writes the fold state, so the file is read after it: a click on
-	// top of that must leave it alone.
 	m := send(open(t, dir), "C")
 	before := file(t, dir)
 	m = click(m, 6)
@@ -1587,7 +1519,6 @@ func TestOnlyALeftPressSelects(t *testing.T) {
 	}
 }
 
-// wheel sends n wheel presses, down for a positive n and up for a negative one.
 func wheel(m Model, n int) Model {
 	button := tea.MouseButtonWheelDown
 	if n < 0 {
@@ -1611,7 +1542,6 @@ func TestTheWheelScrollsTheBoardAndStopsAtBothEnds(t *testing.T) {
 	if got := viewLines(m)[0]; !strings.Contains(got, "task-2") {
 		t.Fatalf("the top row after scrolling is %q, want task-2", got)
 	}
-	// Past the bottom: the last row of the board stays on screen.
 	m = wheel(m, 40)
 	rows, _ := m.rows()
 	if want := len(rows) - m.listHeight(len(rows)); m.offset != want {
@@ -1620,7 +1550,6 @@ func TestTheWheelScrollsTheBoardAndStopsAtBothEnds(t *testing.T) {
 	if !strings.Contains(m.View(), "task-39") {
 		t.Fatalf("the bottom of the board is not on screen:\n%s", m.View())
 	}
-	// Past the top again, and the cursor never moved.
 	m = wheel(m, -40)
 	if m.offset != 0 || m.cursor != 0 {
 		t.Fatalf("scrolling back left offset %d cursor %d, want 0 and 0", m.offset, m.cursor)
