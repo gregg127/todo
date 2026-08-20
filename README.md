@@ -50,3 +50,7 @@ make test
 
 - [overview.md](docs/overview.md) - the design and the file format
 - [security-review.md](docs/security-review.md) - the threat model, the findings and the dependency audit
+
+## License
+
+[MIT](LICENSE) - use it, change it, ship it, sell it. Just keep the copyright notice.
