@@ -1,5 +1,9 @@
 # Security review
 
+**Verdict: low risk.** No open finding in the source and nothing reachable in
+the 19 dependencies; supply chain is the residual risk, held by the SHA-256
+hashes in `go.sum` that `make build` and CI verify.
+
 A security review of `todo-cli` as it stands at commit `6421c38`, covering the
 application source and all 19 modules in the dependency graph.
 
