@@ -7,7 +7,7 @@ Vim-style keys, three sections - **TODO**, **DOING**, **DONE**.
 
 ## Install / uninstall
 
-Needs Go 1.25.13+ and `make`.
+Needs Go 1.27.2+ and `make`.
 
 ### With sudo
 
