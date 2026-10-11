@@ -1569,3 +1569,67 @@ func TestAClickWhileTheInputIsOpenChangesNothing(t *testing.T) {
 		t.Fatalf("a click during insert left input %q", m.input)
 	}
 }
+
+func clickAt(m Model, x, y int) Model {
+	tm, _ := m.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, X: x, Y: y})
+	return tm.(Model)
+}
+
+func TestDoubleClickingATaskEditsIt(t *testing.T) {
+	m, _ := newBoard3(t)
+
+	if m = click(m, 4); m.mode != normalMode {
+		t.Fatalf("a single click opened the input")
+	}
+	if m = click(m, 4); m.mode != insertMode || m.input != "three" {
+		t.Fatalf("a double click left mode %d input %q, want the edit of three", m.mode, m.input)
+	}
+	m = send(m, "!", "enter")
+	if got := cursorLine(t, m); got != "◐ three!" {
+		t.Fatalf("the edit saved %q", got)
+	}
+}
+
+func TestClicksOnTwoTasksOrFarApartAreNoDoubleClick(t *testing.T) {
+	m, _ := newBoard3(t)
+
+	if m = click(click(m, 2), 4); m.mode != normalMode {
+		t.Fatalf("clicks on two tasks opened the input")
+	}
+	m.clicked = m.clicked.Add(-time.Second)
+	if m = click(m, 4); m.mode != normalMode {
+		t.Fatalf("two slow clicks opened the input")
+	}
+}
+
+func TestClickingTheInputMovesTheCaret(t *testing.T) {
+	m, _ := newBoard3(t)
+	m = send(m, "o", "hello")
+	input := len(viewLines(m)) - 3 // the input, a blank row, the hints
+
+	for x, want := range map[int]int{0: 0, 2: 0, 3: 1, 6: 4, 7: 5, 50: 5} {
+		if got := clickAt(m, x, input).pos; got != want {
+			t.Fatalf("a click on column %d put the caret at %d, want %d", x, got, want)
+		}
+	}
+	if got := clickAt(m, 3, input-1).pos; got != 5 {
+		t.Fatalf("a click above the input moved the caret to %d", got)
+	}
+}
+
+func TestClickingAFoldedInputRowMovesTheCaretThere(t *testing.T) {
+	m, _ := newBoard3(t)
+	m = resize(m, 10, 24)
+	m = send(m, "o", "aaaa", "space", "bbbb", "space", "cccc")
+	if lines := m.inputRows(); len(lines) != 2 || lines[1] != "bbbb cccc"+caretCell {
+		t.Fatalf("the input folded as %q", lines)
+	}
+
+	m = clickAt(m, 1, 8) // seven board rows, then the input
+	if got := string([]rune(m.input)[m.pos:]); got != "bbb cccc" {
+		t.Fatalf("a click on the second input row put the caret before %q", got)
+	}
+	if m.input != "aaaa bbbb cccc" {
+		t.Fatalf("a click changed the input to %q", m.input)
+	}
+}

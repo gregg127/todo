@@ -46,6 +46,8 @@ type Model struct {
 	// writes from a hand-edit.
 	saved   time.Time
 	readErr string
+	// When the last click landed on a task, for telling a double click.
+	clicked time.Time
 }
 
 // No-op key presses must not call this, or undo has nothing to do.
@@ -258,7 +260,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.scrollBy(wheelRows), nil
 		case tea.MouseButtonLeft:
 			if m.mode == insertMode {
-				return m, nil
+				return m.clickInput(msg.X, msg.Y), nil
 			}
 			return m.click(msg.Y), nil
 		}

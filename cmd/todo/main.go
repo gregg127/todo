@@ -17,7 +17,8 @@ unless another one is named. The file is created if it is not there yet;
 a file the board cannot read is reported and nothing starts.
 
   j / k        move the cursor down / up (also ↓ / ↑)
-  click        put the cursor on a task
+  click        put the cursor on a task, or the caret in the input
+  double-click edit the task
   wheel        scroll the board
   gg / G       jump to the first / last task
   { / }        jump to the previous / next section

@@ -60,8 +60,9 @@ longer exists.
 ## Deliberately missing
 
 Priorities, due dates, recurring tasks, sub-tasks, tags, multiple boards at
-once, colour configuration, sync. The mouse does two things — a left click puts
-the cursor on the task you clicked, the wheel scrolls the board without moving
-the cursor — and no more: no drag to reorder, no click to tick off. Styling
+once, colour configuration, sync. The mouse does little — a left click puts
+the cursor on the task you clicked (or the caret where you clicked in the
+input), a double click edits the task, the wheel scrolls the board without
+moving the cursor — and no more: no drag to reorder, no click to tick off. Styling
 uses ANSI colours 1–15 only, so the terminal's own colourscheme restyles the
 app for free.

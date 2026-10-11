@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -13,6 +15,8 @@ import (
 const scrolloff = 3
 
 const wheelRows = 3
+
+const doubleClick = 400 * time.Millisecond
 
 var (
 	todoStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
@@ -135,7 +139,13 @@ func (m Model) click(y int) Model {
 	if y < 0 || y >= m.listHeight(len(rows)) || row >= len(at) || at[row] < 0 {
 		return m
 	}
-	m.cursor = at[row]
+	// Bubble Tea reports no double clicks: a second click on the task the
+	// cursor is already on, soon enough, is one.
+	if at[row] == m.cursor && time.Since(m.clicked) < doubleClick {
+		m.clicked = time.Time{}
+		return m.edit().scroll()
+	}
+	m.cursor, m.clicked = at[row], time.Now()
 	return m.scroll()
 }
 
@@ -161,17 +171,12 @@ func (m Model) inputLines() []string {
 	if m.mode != insertMode {
 		return nil
 	}
-	// A placeholder holds the caret's column through the wrap, which trims the
-	// trailing spaces a caret added afterwards would land before.
 	r := []rune(m.input)
-	under, rest := " ", ""
+	under := " "
 	if m.pos < len(r) {
-		under, rest = string(r[m.pos]), string(r[m.pos+1:])
+		under = string(r[m.pos])
 	}
-	lines := []string{"› " + string(r[:m.pos]) + caretCell + rest}
-	if m.width > 0 {
-		lines = wrap(lines[0], m.width)
-	}
+	lines := m.inputRows()
 	for i, line := range lines {
 		if strings.Contains(line, caretCell) {
 			lines[i] = strings.Replace(line, caretCell, m.caret(under), 1)
@@ -179,6 +184,62 @@ func (m Model) inputLines() []string {
 		}
 	}
 	return lines
+}
+
+// inputText is the input row with the caret as a placeholder. A placeholder
+// holds the caret's column through the wrap, which trims the trailing spaces a
+// caret added afterwards would land before. It stands in for the rune under
+// the caret, so rune offsets past the prompt match the input's.
+func (m Model) inputText() string {
+	r := []rune(m.input)
+	rest := ""
+	if m.pos < len(r) {
+		rest = string(r[m.pos+1:])
+	}
+	return inputPrompt + string(r[:m.pos]) + caretCell + rest
+}
+
+func (m Model) inputRows() []string {
+	if m.width > 0 {
+		return wrap(m.inputText(), m.width)
+	}
+	return []string{m.inputText()}
+}
+
+const inputPrompt = "› "
+
+// clickInput puts the caret on the input rune under (x, y).
+func (m Model) clickInput(x, y int) Model {
+	rows, _ := m.rows()
+	lines := m.inputRows()
+	line := y - min(len(rows)-m.offset, m.listHeight(len(rows)))
+	if line < 0 || line >= len(lines) {
+		return m
+	}
+	// Wrapping only breaks at spaces or inside a word wider than the pane, so
+	// each row turns up in the text left after the row before it.
+	text, start := m.inputText(), 0
+	for i := 0; i <= line; i++ {
+		k := strings.Index(text, lines[i])
+		if k < 0 {
+			return m
+		}
+		start += utf8.RuneCountInString(text[:k])
+		if i < line {
+			start += utf8.RuneCountInString(lines[i])
+			text = text[k+len(lines[i]):]
+		}
+	}
+	col, n := 0, 0
+	for _, r := range lines[line] {
+		if col += lipgloss.Width(string(r)); col > x {
+			break
+		}
+		n++
+	}
+	m.pos = min(max(start+n-utf8.RuneCountInString(inputPrompt), 0), len([]rune(m.input)))
+	m.blink = true
+	return m
 }
 
 // Any width-one non-space rune would do; this one is visible if it escapes.
