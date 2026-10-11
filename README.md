@@ -1,18 +1,19 @@
 # todo tui app
 
-An interactive task board in the terminal, stored as a Markdown file. 
+An interactive task board in the terminal, stored as a Markdown file.
 Vim-style keys, three sections - **TODO**, **DOING**, **DONE**.
+
+![todo demo](docs/demo.gif)
 
 ## Install / uninstall
 
 Needs Go 1.25.13+ and `make`.
 
-
 ### With sudo
 
 ```
 make build
-sudo make install      # /usr/local/bin/todo
+sudo make install    # /usr/local/bin/todo
 sudo make uninstall
 ```
 
@@ -26,13 +27,12 @@ PREFIX=~/.local/bin make install
 PREFIX=~/.local/bin make uninstall
 ```
 
-
 ## Usage
 
 ```
-todo                   # ./todo-database.md, created if missing
+todo              # ./todo-database.md, created if missing
 todo board.md     # any other board file
-todo --help         # the key bindings
+todo --help       # the key bindings
 ```
 
 `todo` opens the board in whatever directory you run it from, so each project keeps its own.
