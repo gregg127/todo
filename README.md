@@ -5,7 +5,7 @@ Vim-style keys, three sections - **TODO**, **DOING**, **DONE**.
 
 ![todo demo](docs/demo.gif)
 
-## Install / uninstall
+## Install
 
 Needs Go 1.27.2+ and `make`.
 
@@ -14,7 +14,6 @@ Needs Go 1.27.2+ and `make`.
 ```
 make build
 sudo make install    # /usr/local/bin/todo
-sudo make uninstall
 ```
 
 ### Without sudo
@@ -24,7 +23,6 @@ Use any directory you own that is on your `PATH`.
 ```
 make build
 PREFIX=~/.local/bin make install
-PREFIX=~/.local/bin make uninstall
 ```
 
 ## Usage
@@ -44,6 +42,24 @@ A file the parser cannot read whole is refused at startup rather than silently r
 ```
 make run     # a throwaway copy of the example board
 make test
+```
+
+## Uninstall
+
+This removes the binary only. Your board files stay where they are.
+
+### With sudo
+
+```
+sudo make uninstall    # /usr/local/bin/todo
+```
+
+### Without sudo
+
+Use the same `PREFIX` you installed with.
+
+```
+PREFIX=~/.local/bin make uninstall
 ```
 
 ## Docs
